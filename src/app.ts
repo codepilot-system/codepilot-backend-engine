@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
-import yaml from 'yamljs';
+import fs from 'fs';
+import YAML from 'yaml';
 import path from 'path';
 
 import authRoutes from './services/auth/auth.routes';
@@ -14,7 +15,7 @@ import analyticsRoutes from './services/analytics/analytics.routes';
 import { authenticate } from './middlewares/auth.middleware';
 
 const app = express();
-const swaggerDocument = yaml.load(path.join(__dirname, '../swagger.yaml'));
+const swaggerDocument = YAML.parse(fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8'));
 
 app.use(cors());
 app.use(express.json());
