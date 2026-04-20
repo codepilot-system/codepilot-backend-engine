@@ -1,9 +1,162 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+enum ScanStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum IssueStatus {
+  OPEN
+  FIXED
+  IGNORED
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Category {
+  SECURITY
+  PERFORMANCE
+  FUNCTIONALITY
+  OTHER
+}
+
+// --- MODELS ---
+
+model User {
+  id        Int      @id @default(autoincrement())
+  githubId  String   @unique @map("github_id")
+  email     String?  @unique
+  username  String   @unique
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  projects ProjectMember[]
+  scans    Scan[]
+
+  @@map("users")
+}
+
+model Project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  repoUrl      String   @unique @map("repo_url")
+  provider     String   @default("github")
+  lastScanDate DateTime? @map("last_scan_date")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  members     ProjectMember[]
+  scans       Scan[]
+  issues      Issue[]
+  suggestions Suggestion[]
+  analytics   Analytics[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId Int      @map("project_id")
+  userId    Int      @map("user_id")
+  role      Role     @default(MEMBER)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+model Scan {
+  id          Int        @id @default(autoincrement())
+  projectId   Int        @map("project_id")
+  initiatorId Int        @map("initiator_id")
+  branchName  String     @map("branch_name")
+  status      ScanStatus @default(IN_PROGRESS)
+  scanDate    DateTime   @default(now()) @map("scan_date")
+
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiator User        @relation(fields: [initiatorId], references: [id])
+  issues    Issue[]
+  analytics Analytics[]
+  suggestions Suggestion[]
+
+  @@map("scans")
+}
+
+model Issue {
+  id          Int         @id @default(autoincrement())
+  projectId   Int         @map("project_id")
+  scanId      Int?        @map("scan_id")
+  filePath    String      @map("file_path")
+  lineNumber  Int         @map("line_number")
+  severity    Severity
+  category    Category
+  summary     String
+  description String?
+  codeSnippet String?      @map("code_snippet")
+  status      IssueStatus @default(OPEN)
+  detectedAt  DateTime    @default(now()) @map("detected_at")
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scan        Scan?        @relation(fields: [scanId], references: [id], onDelete: SetNull)
+  suggestions Suggestion[]
+
+  @@map("issues")
+}
+
+model Suggestion {
+  id          Int              @id @default(autoincrement())
+  projectId   Int              @map("project_id")
+  scanId      Int              @map("scan_id")
+  issueId     Int              @map("issue_id")
+  summary     String
+  explanation String?
+  diffPatch   String           @map("diff_patch")
+  status      SuggestionStatus @default(PENDING)
+  generatedAt DateTime         @default(now()) @map("generated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("suggestions")
+}
+
+model Analytics {
+  id                   Int      @id @default(autoincrement())
+  projectId            Int      @map("project_id")
+  scanId               Int      @map("scan_id")
+  avgComplexity        Float    @map("avg_complexity")
+  technicalDebtScore   Int      @map("technical_debt_score")
+  severityDistribution Json     @map("severity_distribution")
+  generatedAt          DateTime @default(now()) @map("generated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("analytics")
 }
