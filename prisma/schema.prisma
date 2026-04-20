@@ -5,5 +5,135 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  githubId  String   @unique
+  email     String?
+  username  String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  projectMembers ProjectMember[]
+  initiatedScans Scan[]
+}
+
+model Project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  repoUrl      String
+  provider     String   @default("github")
+  lastScanDate DateTime?
+  createdAt    DateTime @default(now())
+
+  members ProjectMember[]
+  scans   Scan[]
+}
+
+model ProjectMember {
+  projectId Int
+  userId    Int
+  role      ProjectRole @default(MEMBER)
+
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([projectId, userId])
+}
+
+model Scan {
+  id          Int        @id @default(autoincrement())
+  projectId   Int
+  initiatorId Int
+  scanDate    DateTime   @default(now())
+  status      ScanStatus @default(RUNNING)
+  scanType    ScanType
+  targetPath  String?
+  branchName  String?
+
+  project   Project @relation(fields: [projectId], references: [id])
+  initiator User    @relation(fields: [initiatorId], references: [id])
+
+  issues    Issue[]
+  analytics Analytics?
+}
+
+model Issue {
+  id          Int           @id @default(autoincrement())
+  scanId      Int
+  filePath    String
+  lineNumber  Int?
+  severity    Severity
+  category    IssueCategory
+  description String
+  status      IssueStatus   @default(OPEN)
+
+  scan       Scan        @relation(fields: [scanId], references: [id])
+  suggestion Suggestion?
+}
+
+model Suggestion {
+  id          Int               @id @default(autoincrement())
+  issueId     Int               @unique
+  explanation String
+  diffPatch   String
+  status      SuggestionStatus  @default(PENDING)
+
+  issue Issue @relation(fields: [issueId], references: [id])
+}
+
+model Analytics {
+  id                   Int    @id @default(autoincrement())
+  scanId               Int    @unique
+  avgComplexity        Float
+  severityDistribution Json
+  technicalDebtScore   Int
+
+  scan Scan @relation(fields: [scanId], references: [id])
+}
+
+// Enums
+enum ProjectRole {
+  OWNER
+  MEMBER
+}
+
+enum ScanStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum ScanType {
+  PROJECT_REPO
+  LOCAL_FILE
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IssueCategory {
+  SECURITY
+  PERFORMANCE
+  SMELL
+  DUPLICATE
+  DEAD_CODE
+  COMPLEXITY
+  SRP
+}
+
+enum IssueStatus {
+  OPEN
+  FIXED
+  DISMISSED
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPLIED
+  REJECTED
 }
