@@ -1,11 +1,15 @@
 import { Router } from 'express';
-import { getGithubUrl, loginWithGithub, refreshToken, logout } from './auth.controller';
+import { getGithubUrl, webLogin, extensionLogin, webRefresh, extensionRefresh, webLogout, extensionLogout } from './auth.controller';
 
 const router = Router();
 
 router.get('/github-url', getGithubUrl);
-router.post('/login', loginWithGithub);
-router.post('/refresh', refreshToken);
-router.post('/logout', logout);
+router.post('/web/login', webLogin);
+router.post('/web/refresh', webRefresh);
+router.post('/web/logout', webLogout);
+
+router.post('/extension/login', extensionLogin);
+router.post('/extension/refresh', extensionRefresh);
+router.post('/extension/logout', extensionLogout);
 
 export default router;

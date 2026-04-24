@@ -48,17 +48,30 @@ enum Category {
 // --- MODELS ---
 
 model User {
-  id        Int      @id @default(autoincrement())
-  githubId  String   @unique @map("github_id")
-  email     String?  @unique
-  username  String   @unique
-  avatarUrl String?  @map("avatar_url")
-  createdAt DateTime @default(now()) @map("created_at")
+  id                Int      @id @default(autoincrement())
+  githubId          String   @unique @map("github_id")
+  email             String?  @unique
+  username          String   @unique
+  avatarUrl         String?  @map("avatar_url")
+  githubAccessToken String?  @map("github_access_token")
+  createdAt         DateTime @default(now()) @map("created_at")
 
   projects ProjectMember[]
+  sessions Session[]
   scans    Scan[]
 
   @@map("users")
+}
+
+model Session {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  refreshTokenHash String   @unique @map("refresh_token_hash")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 model Project {
