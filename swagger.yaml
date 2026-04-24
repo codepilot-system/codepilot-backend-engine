@@ -31,31 +31,67 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { url: "https://github.com/login/oauth/authorize?client_id=sample-id" } }
+              example: { status: "success", data: { url: "https://github.com/login/oauth/authorize?client_id=sample-id&state=random-state-value" } }
 
-  /api/auth/login:
+  /api/auth/web/login:
     post:
       tags: [Auth]
       security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
-            schema: { type: object, required: [code], properties: { code: { type: string } } }
+            schema: { type: object, required: [code, state], properties: { code: { type: string }, state: { type: string } } }
+      responses:
+        200:
+          headers:
+            Set-Cookie: { schema: { type: string, example: "refreshToken=abcde12345; Path=/; HttpOnly; Secure; SameSite=None" } }
+          content:
+            application/json:
+              example: { status: "success", data: { accessToken: "access-token-sample", user: { id: 1, githubId: 10001, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
+
+  /api/auth/web/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       responses:
         200:
           content:
             application/json:
-              example:
-                status: "success"
-                data:
-                  accessToken: "access-token-sample"
-                  refreshToken: "refresh-token-sample"
-                  user: { id: 1, githubId: 10001, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
+              example: { status: "success", data: { accessToken: "new-jwt-token" } }
 
-  /api/auth/refresh:
+  /api/auth/web/logout:
     post:
       tags: [Auth]
       security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Logged out successfully" }
+
+  /api/auth/extension/login:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [githubAccessToken], properties: { githubAccessToken: { type: string } } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { accessToken: "access-token-sample", refreshToken: "refresh-token-sample", user: { id: 1, githubId: 10001, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
+
+  /api/auth/extension/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
@@ -64,12 +100,13 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { accessToken: "new-jwt-token" } }
+              example: { status: "success", data: { accessToken: "new-jwt-token", refreshToken: "new-refresh-token" } }
 
-  /api/auth/logout:
+  /api/auth/extension/logout:
     post:
       tags: [Auth]
       security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
@@ -92,6 +129,7 @@ paths:
                 data: { id: 1, githubId: 10001, username: "sample-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
     delete:
       tags: [Users]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       responses:
         200:
           content:
@@ -108,6 +146,7 @@ paths:
               example: { status: "success", data: [{ id: 101, name: "sample-project", repoUrl: "https://github.com/user/sample-project", provider: "github" }] }
     post:
       tags: [Projects]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
@@ -139,7 +178,9 @@ paths:
               example: { status: "success", data: { id: 101, name: "sample-project", repoUrl: "https://github.com/user/sample-project", provider: "github" } }
     patch:
       tags: [Projects]
-      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }]
+      parameters: 
+        - { in: path, name: projectId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       requestBody:
         content:
           application/json:
@@ -151,7 +192,9 @@ paths:
               example: { status: "success", data: { id: 101, name: "updated-name", repoUrl: "https://github.com/user/sample-project", provider: "github" } }
     delete:
       tags: [Projects]
-      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }]
+      parameters: 
+        - { in: path, name: projectId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       responses:
         200:
           content:
@@ -176,6 +219,7 @@ paths:
                 pagination: { page: 1, limit: 20, total: 1 }
     post:
       tags: [Scans]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
@@ -194,6 +238,7 @@ paths:
   /api/scans/local-analysis:
     post:
       tags: [Scans]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
@@ -237,7 +282,9 @@ paths:
                 data: { id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", scanDate: "2026-04-10T12:00:00Z" }
     delete:
       tags: [Scans]
-      parameters: [{ in: path, name: scanId, required: true, schema: { type: integer } }]
+      parameters: 
+        - { in: path, name: scanId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       responses:
         200:
           content:
@@ -277,7 +324,9 @@ paths:
                 data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", description: "Sample detailed description of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "OPEN", detectedAt: "2026-04-10T12:00:00Z" }
     patch:
       tags: [Issues]
-      parameters: [{ in: path, name: issueId, required: true, schema: { type: integer } }]
+      parameters: 
+        - { in: path, name: issueId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       requestBody:
         content:
           application/json:
@@ -321,7 +370,9 @@ paths:
   /api/ai/suggestions/{suggestionId}/apply:
     post:
       tags: [AI]
-      parameters: [{ in: path, name: suggestionId, required: true, schema: { type: integer } }]
+      parameters: 
+        - { in: path, name: suggestionId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       responses:
         200:
           content:
@@ -331,7 +382,9 @@ paths:
   /api/ai/suggestions/{suggestionId}/dismiss:
     post:
       tags: [AI]
-      parameters: [{ in: path, name: suggestionId, required: true, schema: { type: integer } }]
+      parameters: 
+        - { in: path, name: suggestionId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       responses:
         200:
           content:
