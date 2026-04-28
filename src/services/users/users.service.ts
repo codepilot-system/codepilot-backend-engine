@@ -26,11 +26,24 @@ export const getUserById = async (id: number) => {
 
 export const getGithubUser = async (accessToken: string): Promise<GitHubUserResponse> => {
   try {
-    const response = await axios.get<GitHubUserResponse>('https://api.github.com/user', {
+    const userResponse = await axios.get<GitHubUserResponse>('https://api.github.com/user', {
       headers: { Authorization: `Bearer ${accessToken}` },
       timeout: 10000,
     });
-    return response.data;
+
+    const githubUser = userResponse.data;
+
+    if (!githubUser.email) {
+      const emailResponse = await axios.get<any[]>('https://api.github.com/user/emails', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10000,
+      });
+
+      const primaryEmail = emailResponse.data.find((e: any) => e.primary && e.verified) || emailResponse.data[0];
+      if (primaryEmail) githubUser.email = primaryEmail.email;
+    }
+
+    return githubUser;
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 401)
       throw new ApiError('GitHub token expired or invalid. Please sign in again.', 401);
