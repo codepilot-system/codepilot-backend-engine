@@ -136,6 +136,19 @@ paths:
             application/json:
               example: { status: "success", message: "User account deleted successfully" }
 
+  /api/users/me/sync:
+    post:
+      tags: [Users]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                message: "Profile synced with GitHub successfully"
+                data: { id: 1, githubId: 10001, username: "synced-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
+
   /api/projects:
     get:
       tags: [Projects]

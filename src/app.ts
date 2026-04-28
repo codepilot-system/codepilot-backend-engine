@@ -16,6 +16,7 @@ import analyticsRoutes from './services/analytics/analytics.routes';
 import { ENV } from './config/env.config';
 import { authenticate } from './middlewares/auth.middleware';
 import { csrfProtection } from './middlewares/csrf.middleware';
+import { errorHandler } from './middlewares/error.middleware';
 
 const app = express();
 const swaggerDocument = YAML.parse(fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8'));
@@ -43,5 +44,7 @@ app.use('/api/scans', scansRoutes);
 app.use('/api/issues', issuesRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/analytics', analyticsRoutes);
+
+app.use(errorHandler);
 
 export default app;

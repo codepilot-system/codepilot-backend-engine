@@ -106,13 +106,13 @@ model ProjectMember {
 model Scan {
   id          Int        @id @default(autoincrement())
   projectId   Int        @map("project_id")
-  initiatorId Int        @map("initiator_id")
+  initiatorId Int?       @map("initiator_id")
   branchName  String     @map("branch_name")
   status      ScanStatus @default(IN_PROGRESS)
   scanDate    DateTime   @default(now()) @map("scan_date")
 
   project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiator User        @relation(fields: [initiatorId], references: [id])
+  initiator User?       @relation(fields: [initiatorId], references: [id], onDelete: SetNull)
   issues    Issue[]
   analytics Analytics[]
   suggestions Suggestion[]
@@ -123,7 +123,7 @@ model Scan {
 model Issue {
   id          Int         @id @default(autoincrement())
   projectId   Int         @map("project_id")
-  scanId      Int?        @map("scan_id")
+  scanId      Int         @map("scan_id")
   filePath    String      @map("file_path")
   lineNumber  Int         @map("line_number")
   severity    Severity
@@ -135,7 +135,7 @@ model Issue {
   detectedAt  DateTime    @default(now()) @map("detected_at")
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scan        Scan?        @relation(fields: [scanId], references: [id], onDelete: SetNull)
+  scan        Scan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
   suggestions Suggestion[]
 
   @@map("issues")
