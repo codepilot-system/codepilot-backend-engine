@@ -1,9 +1,8 @@
 import axios from 'axios';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import prisma from '../../lib/prisma';
 import { ENV } from '../../config/env.config';
-import { encrypt } from '../../lib/encryption';
 
 interface GitHubTokenResponse {
   access_token?: string;
@@ -11,13 +10,6 @@ interface GitHubTokenResponse {
   scope?: string;
   error?: string;
   error_description?: string;
-}
-
-interface GitHubUserResponse {
-  id: number;
-  login: string;
-  email: string | null;
-  avatar_url: string;
 }
 
 export const getGithubAuthUrl = (state: string) => {
@@ -48,36 +40,6 @@ export const exchangeCodeForToken = async (code: string): Promise<string> => {
   return response.data.access_token;
 };
 
-export const getGithubUser = async (accessToken: string): Promise<GitHubUserResponse> => {
-  const response = await axios.get<GitHubUserResponse>('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    timeout: 10000,
-  });
-
-  return response.data;
-};
-
-export const upsertUser = async (githubUser: GitHubUserResponse, accessToken: string) => {
-  const encryptedToken = encrypt(accessToken);
-
-  return await prisma.user.upsert({
-    where: { githubId: githubUser.id.toString() },
-    update: {
-      username: githubUser.login,
-      avatarUrl: githubUser.avatar_url,
-      email: githubUser.email,
-      githubAccessToken: encryptedToken,
-    },
-    create: {
-      githubId: githubUser.id.toString(),
-      username: githubUser.login,
-      avatarUrl: githubUser.avatar_url,
-      email: githubUser.email,
-      githubAccessToken: encryptedToken,
-    },
-  });
-};
-
 export const generateTokens = async (userId: number) => {
   const accessToken = jwt.sign(
     { userId },
@@ -95,7 +57,7 @@ export const generateTokens = async (userId: number) => {
 
 export const createSession = async (userId: number, refreshToken: string) => {
   const hash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-  await prisma.session.create({data: { userId, refreshTokenHash: hash }});
+  await prisma.session.create({ data: { userId, refreshTokenHash: hash } });
 };
 
 export const updateSession = async (oldToken: string, newToken: string) => {
@@ -116,7 +78,7 @@ export const verifyRefreshToken = async (token: string) => {
     const decoded = jwt.verify(token, ENV.JWT_REFRESH_SECRET as jwt.Secret) as { userId: number };
 
     const hash = crypto.createHash('sha256').update(token).digest('hex');
-    const session = await prisma.session.findUnique({where: { refreshTokenHash: hash }});
+    const session = await prisma.session.findUnique({ where: { refreshTokenHash: hash } });
 
     if (!session || session.userId !== decoded.userId) return null;
 
@@ -128,5 +90,5 @@ export const verifyRefreshToken = async (token: string) => {
 
 export const deleteRefreshToken = async (token: string) => {
   const hash = crypto.createHash('sha256').update(token).digest('hex');
-  await prisma.session.deleteMany({where: { refreshTokenHash: hash }});
+  await prisma.session.deleteMany({ where: { refreshTokenHash: hash } });
 };
