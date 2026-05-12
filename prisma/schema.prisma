@@ -39,10 +39,20 @@ enum Severity {
 }
 
 enum Category {
+  CODE_SMELL
+  DEAD_CODE
+  DUPLICATE
+  COMPLEXITY
+  SRP_VIOLATION
   SECURITY
   PERFORMANCE
-  FUNCTIONALITY
-  OTHER
+}
+
+
+
+enum ScanType {
+  REPO
+  LOCAL
 }
 
 // --- MODELS ---
@@ -116,6 +126,7 @@ model Scan {
   issues    Issue[]
   analytics Analytics[]
   suggestions Suggestion[]
+scanType ScanType @default(REPO) @map("scan_type")
 
   @@map("scans")
 }
