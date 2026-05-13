@@ -39,11 +39,18 @@ enum Severity {
 }
 
 enum Category {
+  CODE_SMELL
+  DEAD_CODE
+  DUPLICATE
+  COMPLEXITY
+  SRP_VIOLATION
   SECURITY
   PERFORMANCE
-  FUNCTIONALITY
-  OTHER
 }
+
+
+
+
 
 // --- MODELS ---
 
