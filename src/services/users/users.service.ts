@@ -1,14 +1,9 @@
-import axios, { isAxiosError } from 'axios';
 import prisma from '../../lib/prisma';
 import { encrypt, decrypt } from '../../lib/encryption';
 import { ApiError } from '../../lib/ApiError';
-
-export interface GitHubUserResponse {
-  id: number;
-  login: string;
-  email: string | null;
-  avatar_url: string;
-}
+import { GitHubTokenResponse, GitHubUserResponse, getUserOctokit, refreshGithubToken } from '../github/github.service';
+import { RequestError } from '@octokit/request-error';
+import { Role } from '@prisma/client';
 
 export const getUserById = async (id: number) => {
   return await prisma.user.findUnique({
@@ -26,34 +21,34 @@ export const getUserById = async (id: number) => {
 
 export const getGithubUser = async (accessToken: string): Promise<GitHubUserResponse> => {
   try {
-    const userResponse = await axios.get<GitHubUserResponse>('https://api.github.com/user', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      timeout: 10000,
+    const octokit = await getUserOctokit(accessToken);
+
+    const { data: githubUser } = await octokit.request('GET /user', {
+      request: { signal: AbortSignal.timeout(10000) },
     });
 
-    const githubUser = userResponse.data;
-
     if (!githubUser.email) {
-      const emailResponse = await axios.get<any[]>('https://api.github.com/user/emails', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        timeout: 10000,
+      const { data: emails } = await octokit.request('GET /user/emails', {
+        request: { signal: AbortSignal.timeout(10000) },
       });
 
-      const primaryEmail = emailResponse.data.find((e: any) => e.primary && e.verified) || emailResponse.data[0];
+      const primaryEmail = emails.find((e: any) => e.primary && e.verified) || emails[0];
       if (primaryEmail) githubUser.email = primaryEmail.email;
     }
 
-    return githubUser;
+    return githubUser as GitHubUserResponse;
   } catch (e) {
-    if (isAxiosError(e) && e.response?.status === 401)
+    if (e instanceof RequestError && e.status === 401)
       throw new ApiError('GitHub token expired or invalid. Please sign in again.', 401);
 
     throw e;
   }
 };
 
-export const upsertUser = async (githubUser: GitHubUserResponse, accessToken: string) => {
-  const encryptedToken = encrypt(accessToken);
+export const upsertUser = async (githubUser: GitHubUserResponse, tokenData: GitHubTokenResponse) => {
+  const encryptedToken = encrypt(tokenData.access_token);
+  const encryptedRefreshToken = tokenData.refresh_token ? encrypt(tokenData.refresh_token) : null;
+  const expiresAt = tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null;
 
   return await prisma.user.upsert({
     where: { githubId: githubUser.id.toString() },
@@ -62,6 +57,8 @@ export const upsertUser = async (githubUser: GitHubUserResponse, accessToken: st
       avatarUrl: githubUser.avatar_url,
       email: githubUser.email,
       githubAccessToken: encryptedToken,
+      githubRefreshToken: encryptedRefreshToken || undefined,
+      githubTokenExpiresAt: expiresAt || undefined,
     },
     create: {
       githubId: githubUser.id.toString(),
@@ -69,18 +66,58 @@ export const upsertUser = async (githubUser: GitHubUserResponse, accessToken: st
       avatarUrl: githubUser.avatar_url,
       email: githubUser.email,
       githubAccessToken: encryptedToken,
+      githubRefreshToken: encryptedRefreshToken,
+      githubTokenExpiresAt: expiresAt,
     },
   });
 };
 
-export const syncProfile = async (id: number) => {
-  const user = await prisma.user.findUnique({ where: { id } });
-  if (!user) throw new ApiError('User not found', 404);
-  if (!user.githubAccessToken) {
-    throw new ApiError('No GitHub token on file. Please sign in again.', 401);
-  }
+export const getValidGithubToken = async (userId: number): Promise<string> => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { githubId: true, githubAccessToken: true, githubRefreshToken: true, githubTokenExpiresAt: true }
+  });
 
-  const githubToken = decrypt(user.githubAccessToken);
+  if (!user || !user.githubAccessToken)
+    throw new ApiError('GitHub connection not found. Please sign in again.', 401);
+
+  const now = new Date();
+  const buffer = 5 * 60 * 1000;
+
+  if (!user.githubTokenExpiresAt || user.githubTokenExpiresAt.getTime() > now.getTime() + buffer)
+    return decrypt(user.githubAccessToken);
+
+  if (!user.githubRefreshToken)
+    throw new ApiError('GitHub token expired and no refresh token available. Please sign in again.', 401);
+
+  try {
+    const refreshToken = decrypt(user.githubRefreshToken);
+    const newTokenData = await refreshGithubToken(refreshToken);
+
+    if (!newTokenData.access_token)
+      throw new ApiError('GitHub token refresh returned an empty token. Please sign in again.', 401);
+
+    const encryptedToken = encrypt(newTokenData.access_token);
+    const encryptedRefreshToken = newTokenData.refresh_token ? encrypt(newTokenData.refresh_token) : null;
+    const expiresAt = newTokenData.expires_in ? new Date(Date.now() + newTokenData.expires_in * 1000) : null;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        githubAccessToken: encryptedToken,
+        githubRefreshToken: encryptedRefreshToken || undefined,
+        githubTokenExpiresAt: expiresAt || undefined,
+      }
+    });
+
+    return newTokenData.access_token;
+  } catch {
+    throw new ApiError('Your GitHub session has expired. Please sign in again.', 401);
+  }
+};
+
+export const syncProfile = async (id: number) => {
+  const githubToken = await getValidGithubToken(id);
   const githubUser = await getGithubUser(githubToken);
 
   return await prisma.user.update({
@@ -102,18 +139,34 @@ export const syncProfile = async (id: number) => {
 };
 
 export const deleteUser = async (id: number) => {
-  return await prisma.$transaction(async (transaction) => {
-    const individualProjects = await transaction.project.findMany({
-      where: { members: { every: { userId: id } } },
-      select: { id: true },
-    });
+  const userProjects = await prisma.project.findMany({
+    where: { members: { some: { userId: id, role: Role.ADMIN } } },
+    select: {
+      id: true,
+      _count: { select: { members: true } },
+      members: { where: { role: Role.ADMIN }, select: { userId: true } }
+    }
+  });
 
-    if (individualProjects.length > 0) {
-      await transaction.project.deleteMany({
-        where: { id: { in: individualProjects.map((p) => p.id) } },
+  for (const project of userProjects) {
+    if (project.members.length <= 1 && project._count.members > 1)
+      throw new ApiError(
+        'Cannot delete account: you are the last admin of a shared project. Please delete the project or have another admin join first.',
+        400
+      );
+  }
+
+  const soloProjectIds = userProjects
+    .filter(p => p._count.members === 1)
+    .map(p => p.id);
+
+  return await prisma.$transaction(async (tx) => {
+    if (soloProjectIds.length > 0) {
+      await tx.project.deleteMany({
+        where: { id: { in: soloProjectIds } }
       });
     }
 
-    return await transaction.user.delete({ where: { id } });
+    return await tx.user.delete({ where: { id } });
   });
 };

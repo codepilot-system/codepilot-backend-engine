@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Category, Severity, IssueStatus } from '../../generated/prisma';
+import { Category, Severity, IssueStatus } from '@prisma/client';
 import {
     getIssuesByProject,
     getIssueById as getIssueByIdService,
@@ -49,7 +49,7 @@ export const getIssueById = async (req: Request, res: Response) => {
     const { issueId } = req.params;
 
     try {
-        const issue = await getIssueByIdService(parseInt(issueId));
+        const issue = await getIssueByIdService(parseInt(issueId as string));
 
         if (!issue) {
             return res.status(404).json({ status: "error", message: "Issue not found" });
@@ -74,7 +74,7 @@ export const patchIssue = async (req: Request, res: Response) => {
 
     try {
         const updated = await updateIssueStatus(
-            parseInt(issueId),
+            parseInt(issueId as string),
             status as IssueStatus
         );
 
@@ -91,7 +91,7 @@ export const applyIssuePatch = async (req: Request, res: Response) => {
     const { issueId } = req.params;
 
     try {
-        await applyPatch(parseInt(issueId));
+        await applyPatch(parseInt(issueId as string));
 
         return res.status(200).json({
             status: "success",

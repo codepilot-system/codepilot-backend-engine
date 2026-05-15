@@ -1,5 +1,5 @@
 import prisma from "../../lib/prisma";
-import { Category, Severity, IssueStatus, SuggestionStatus } from "../../generated/prisma";
+import { Category, Severity, IssueStatus, SuggestionStatus } from "@prisma/client";
 
 interface CreateIssueInput {
     severity: Severity;
@@ -25,8 +25,7 @@ export const createIssues = async (issues: CreateIssueInput[], scanId: number, p
             summary: issue.summary,
             description: issue.description,
             codeSnippet: issue.codeSnippet,
-            status: issue.status ?? 'OPEN'
-
+            status: issue.status ?? IssueStatus.OPEN
         })
 
 
@@ -103,7 +102,7 @@ export const createSuggestions = async (
     return prisma.suggestion.createMany({
         data: suggestions.map(s => ({
             ...s,
-            status: 'PENDING' as SuggestionStatus
+            status: SuggestionStatus.PENDING
         }))
     });
 };
@@ -124,8 +123,8 @@ export const applyPatch = async (issueId: number) => {
 
     await prisma.suggestion.update({
         where: { id: suggestion.id },
-        data: { status: 'APPLIED' }
+        data: { status: SuggestionStatus.APPLIED }
     });
 
-    return updateIssueStatus(issueId, 'FIXED');
+    return updateIssueStatus(issueId, IssueStatus.FIXED);
 };
