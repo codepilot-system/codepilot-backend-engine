@@ -5,7 +5,9 @@
   "scripts": {
     "build": "npx tsc",
     "start": "node dist/src/server.js",
-    "dev": "nodemon --watch src --exec ts-node src/server.ts"
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:webhook\"",
+    "dev:server": "nodemon --watch src --exec ts-node src/server.ts",
+    "dev:webhook": "node -e \"require('dotenv').config(); const Smee = require('smee-client'); new Smee({ source: process.env.GITHUB_WEBHOOK_PROXY_URL, target: 'http://localhost:5000/api/webhooks/github', logger: console }).start()\""
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,7 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
+    "octokit": "^5.0.5",
     "pg": "^8.20.0",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^2.8.3"
@@ -37,8 +40,10 @@
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.20.0",
     "@types/swagger-ui-express": "^4.1.8",
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.14",
     "prisma": "^7.7.0",
+    "smee-client": "^5.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
   }

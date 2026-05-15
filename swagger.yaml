@@ -126,7 +126,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 1, githubId: 10001, username: "sample-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
+                data: { id: 1, githubId: 10001, username: "sample-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
     delete:
       tags: [Users]
       parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
@@ -147,28 +147,52 @@ paths:
               example:
                 status: "success"
                 message: "Profile synced with GitHub successfully"
-                data: { id: 1, githubId: 10001, username: "synced-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
+                data: { id: 1, githubId: 10001, username: "synced-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
 
   /api/projects:
     get:
       tags: [Projects]
+      parameters:
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 30, maximum: 50 } }
       responses:
         200:
           content:
             application/json:
-              example: { status: "success", data: [{ id: 101, name: "sample-project", repoUrl: "https://github.com/user/sample-project", provider: "github" }] }
+              example:
+                status: "success"
+                data: [{ id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: 12345678, lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }]
+                pagination: { page: 1, limit: 30, total: 1 }
     post:
       tags: [Projects]
       parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
-            schema: { type: object, required: [repoUrl], properties: { repoUrl: { type: string }, name: { type: string } } }
+            schema: { type: object, required: [owner, repoName], properties: { owner: { type: string }, repoName: { type: string } } }
       responses:
         201:
           content:
             application/json:
-              example: { status: "success", data: { id: 102, name: "new-project", repoUrl: "https://github.com/user/new-project", provider: "github" } }
+              example:
+                status: "success"
+                data: { id: 102, name: "Hello-World", repoUrl: "https://github.com/octocat/Hello-World", provider: "GITHUB", githubRepoId: "1296269", owner: "octocat", repoName: "Hello-World", installationId: 87654321, lastScanDate: null, createdAt: "2026-05-10T12:00:00.000Z" }
+
+  /api/projects/discover:
+    get:
+      tags: [Projects]
+      parameters:
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 30, maximum: 50 } }
+        - { in: query, name: search, required: false, schema: { type: string } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ githubId: 1296269, name: "Hello-World", owner: "octocat", fullName: "octocat/Hello-World", url: "https://github.com/octocat/Hello-World", description: "My first repository on GitHub!", private: false, isAdmin: true, status: "IMPORT", projectId: null }]
+                pagination: { page: 1, limit: 30, total: null }
 
   /api/projects/{projectId}/members:
     get:
@@ -178,7 +202,9 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: [{ userId: 1, username: "owner", role: "OWNER" }] }
+              example:
+                status: "success"
+                data: [{ userId: 1, username: "alice", avatarUrl: "https://avatars.githubusercontent.com/u/1", role: "ADMIN" }]
 
   /api/projects/{projectId}:
     get:
@@ -188,31 +214,55 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { id: 101, name: "sample-project", repoUrl: "https://github.com/user/sample-project", provider: "github" } }
+              example:
+                status: "success"
+                data: { id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: 12345678, lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }
     patch:
       tags: [Projects]
-      parameters: 
-        - { in: path, name: projectId, required: true, schema: { type: integer } }
-        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
           application/json:
-            schema: { type: object, properties: { name: { type: string } } }
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
       responses:
         200:
           content:
             application/json:
-              example: { status: "success", data: { id: 101, name: "updated-name", repoUrl: "https://github.com/user/sample-project", provider: "github" } }
+              example:
+                status: "success"
+                data: { id: 101, name: "updated-name", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: 12345678, lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z" }
     delete:
       tags: [Projects]
-      parameters: 
-        - { in: path, name: projectId, required: true, schema: { type: integer } }
-        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       responses:
         200:
           content:
             application/json:
-              example: { status: "success", message: "Project disconnected successfully" }
+              example: { status: "success", message: "Project deleted successfully" }
+
+  /api/projects/{projectId}/sync:
+    post:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  role: "ADMIN"
+                  project: { name: "updated-repo-name", owner: "new-owner", repoUrl: "https://github.com/new-owner/updated-repo-name" }
+
+  /api/projects/{projectId}/leave:
+    delete:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Successfully left the project" }
 
   /api/scans:
     get:

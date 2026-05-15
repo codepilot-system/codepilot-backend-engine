@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import * as authService from './auth.service';
+import { GitHubTokenResponse, exchangeCodeForToken } from '../github/github.service';
 import * as usersService from '../users/users.service';
 import { COOKIE_OPTIONS } from '../../config/auth.config';
 import { ApiError } from '../../lib/ApiError';
@@ -26,9 +27,9 @@ export const webLogin = async (req: Request, res: Response) => {
 
   res.clearCookie('auth_state', COOKIE_OPTIONS);
 
-  const githubAccessToken = await authService.exchangeCodeForToken(code);
-  const githubUser = await usersService.getGithubUser(githubAccessToken);
-  const user = await usersService.upsertUser(githubUser, githubAccessToken);
+  const tokenData: GitHubTokenResponse = await exchangeCodeForToken(code);
+  const githubUser = await usersService.getGithubUser(tokenData.access_token);
+  const user = await usersService.upsertUser(githubUser, tokenData);
   const tokens = await authService.generateTokens(user.id);
   await authService.createSession(user.id, tokens.refreshToken);
 
@@ -54,7 +55,7 @@ export const extensionLogin = async (req: Request, res: Response) => {
   if (!githubAccessToken) throw new ApiError('githubAccessToken is required', 400);
 
   const githubUser = await usersService.getGithubUser(githubAccessToken);
-  const user = await usersService.upsertUser(githubUser, githubAccessToken);
+  const user = await usersService.upsertUser(githubUser, { access_token: githubAccessToken });
   const tokens = await authService.generateTokens(user.id);
   await authService.createSession(user.id, tokens.refreshToken);
 

@@ -16,8 +16,10 @@ const prisma = new PrismaClient({
   ],
 });
 
-prisma.$on('query', (e: any) => {
-  console.log(`[Query]: ${e.query} | Params: ${e.params} | Duration: ${e.duration}ms`);
-});
+if (ENV.NODE_ENV === 'development') {
+  prisma.$on('query', (e: any) => {
+    console.log(`[Query]: ${e.query} | Params: ${e.params} | Duration: ${e.duration}ms`);
+  });
+}
 
 export default prisma;

@@ -9,7 +9,7 @@ datasource db {
 // --- ENUMS ---
 
 enum Role {
-  OWNER
+  ADMIN
   MEMBER
 }
 
@@ -46,22 +46,26 @@ enum Category {
   SRP_VIOLATION
   SECURITY
   PERFORMANCE
+  FUNCTIONALITY
+  OTHER
 }
 
-
-
-
+enum Provider {
+  GITHUB
+}
 
 // --- MODELS ---
 
 model User {
-  id                Int      @id @default(autoincrement())
-  githubId          String   @unique @map("github_id")
-  email             String?  @unique
-  username          String   @unique
-  avatarUrl         String?  @map("avatar_url")
-  githubAccessToken String?  @map("github_access_token")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                   Int       @id @default(autoincrement())
+  githubId             String    @unique @map("github_id")
+  email                String?   @unique
+  username             String    @unique
+  avatarUrl            String?   @map("avatar_url")
+  githubAccessToken    String?   @map("github_access_token")
+  githubRefreshToken   String?   @map("github_refresh_token")
+  githubTokenExpiresAt DateTime? @map("github_token_expires_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
 
   projects ProjectMember[]
   sessions Session[]
@@ -82,12 +86,16 @@ model Session {
 }
 
 model Project {
-  id           Int      @id @default(autoincrement())
-  name         String
-  repoUrl      String   @unique @map("repo_url")
-  provider     String   @default("github")
-  lastScanDate DateTime? @map("last_scan_date")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id             Int      @id @default(autoincrement())
+  name           String
+  repoUrl        String   @map("repo_url")
+  provider       Provider @default(GITHUB)
+  githubRepoId   BigInt   @map("github_repo_id")
+  owner          String
+  repoName       String   @map("repo_name")
+  installationId Int?     @map("installation_id")
+  lastScanDate   DateTime? @map("last_scan_date")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   members     ProjectMember[]
   scans       Scan[]
@@ -95,6 +103,7 @@ model Project {
   suggestions Suggestion[]
   analytics   Analytics[]
 
+  @@unique([provider, githubRepoId])
   @@map("projects")
 }
 
@@ -107,6 +116,7 @@ model ProjectMember {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([projectId, userId])
+  @@index([userId])
   @@map("project_members")
 }
 
@@ -124,6 +134,7 @@ model Scan {
   analytics Analytics[]
   suggestions Suggestion[]
 
+  @@index([projectId])
   @@map("scans")
 }
 
@@ -145,6 +156,7 @@ model Issue {
   scan        Scan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
   suggestions Suggestion[]
 
+  @@index([scanId])
   @@map("issues")
 }
 
@@ -163,6 +175,7 @@ model Suggestion {
   scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
   issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
+  @@index([issueId])
   @@map("suggestions")
 }
 
@@ -178,5 +191,7 @@ model Analytics {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
+  @@unique([scanId])
+  @@index([projectId])
   @@map("analytics")
 }

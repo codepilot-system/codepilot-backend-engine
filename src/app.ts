@@ -17,6 +17,13 @@ import { ENV } from './config/env.config';
 import { authenticate } from './middlewares/auth.middleware';
 import { csrfProtection } from './middlewares/csrf.middleware';
 import { errorHandler } from './middlewares/error.middleware';
+import { handleGithubWebhook } from './services/github/github.webhooks';
+
+Object.assign(BigInt.prototype as object, {
+  toJSON(this: bigint) {
+    return this.toString();
+  },
+});
 
 const app = express();
 const swaggerDocument = YAML.parse(fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8'));
@@ -25,6 +32,8 @@ app.use(cors({
   origin: ENV.FRONTEND_URL,
   credentials: true,
 }));
+app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), handleGithubWebhook);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(csrfProtection);
