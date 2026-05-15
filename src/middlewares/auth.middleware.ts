@@ -13,7 +13,7 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new ApiError('Authentication is required. Provide a JWT token in the Authorization header.', 401);
+    throw new ApiError('Authentication required', 401);
   }
 
   const token = authHeader.split(' ')[1];
@@ -23,6 +23,6 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
     req.user = decoded;
     next();
   } catch (error) {
-    throw new ApiError('Invalid or expired token.', 401);
+    throw new ApiError('Invalid or expired token', 401);
   }
 };

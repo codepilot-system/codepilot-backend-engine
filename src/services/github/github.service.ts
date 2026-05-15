@@ -46,8 +46,10 @@ export const exchangeCodeForToken = async (code: string) => {
     timeout: 10000,
   });
 
-  if (response.data.error || !response.data.access_token)
-    throw new Error(`GitHub OAuth error: ${response.data.error_description || response.data.error || 'Failed to get access token'}`);
+  if (response.data.error || !response.data.access_token) {
+    console.error('GitHub OAuth error:', response.data.error_description || response.data.error);
+    throw new ApiError('GitHub authentication failed', 401);
+  }
 
   return response.data;
 };
@@ -63,8 +65,10 @@ export const refreshGithubToken = async (refreshToken: string) => {
     timeout: 10000,
   });
 
-  if (response.data.error || !response.data.access_token)
-    throw new Error(`GitHub token refresh error: ${response.data.error_description || response.data.error || 'Failed to refresh access token'}`);
+  if (response.data.error || !response.data.access_token) {
+    console.error('GitHub token refresh error:', response.data.error_description || response.data.error);
+    throw new ApiError('GitHub token refresh failed', 401);
+  }
 
   return response.data;
 };

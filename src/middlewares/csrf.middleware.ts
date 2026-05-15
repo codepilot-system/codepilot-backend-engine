@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ENV } from '../config/env.config';
+import { ApiError } from '../lib/ApiError';
 
 export const csrfProtection = (req: Request, res: Response, next: NextFunction) => {
   if (ENV.NODE_ENV !== 'production')
@@ -11,10 +12,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
     const customHeader = req.headers['x-requested-with'];
 
     if (customHeader !== 'XMLHttpRequest') {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Security alert: Missing security header (X-Requested-With). Request blocked to prevent potential CSRF.'
-      });
+      throw new ApiError('Missing required X-Requested-With header', 403);
     }
   }
 

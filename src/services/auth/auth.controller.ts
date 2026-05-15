@@ -20,7 +20,7 @@ export const webLogin = async (req: Request, res: Response) => {
   const { code, state } = req.body;
   const cookieState = req.cookies.auth_state;
 
-  if (!code) throw new ApiError('Code is required', 400);
+  if (!code) throw new ApiError('Authorization code is required', 400);
 
   if (!state || !cookieState || state !== cookieState)
     throw new ApiError('Invalid state. Possible CSRF attack.', 403);
@@ -52,7 +52,7 @@ export const webLogin = async (req: Request, res: Response) => {
 export const extensionLogin = async (req: Request, res: Response) => {
   const { githubAccessToken } = req.body;
 
-  if (!githubAccessToken) throw new ApiError('githubAccessToken is required', 400);
+  if (!githubAccessToken) throw new ApiError('GitHub access token is required', 400);
 
   const githubUser = await usersService.getGithubUser(githubAccessToken);
   const user = await usersService.upsertUser(githubUser, { access_token: githubAccessToken });
@@ -75,7 +75,7 @@ export const extensionLogin = async (req: Request, res: Response) => {
 
 export const webRefresh = async (req: Request, res: Response) => {
   const refreshToken = req.cookies.refreshToken;
-  if (!refreshToken) throw new ApiError('Refresh token cookie is missing', 401);
+  if (!refreshToken) throw new ApiError('Refresh token is required', 400);
 
   const userId = await authService.verifyRefreshToken(refreshToken);
   if (!userId) throw new ApiError('Invalid or expired refresh token', 401);
@@ -90,7 +90,7 @@ export const webRefresh = async (req: Request, res: Response) => {
 
 export const extensionRefresh = async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
-  if (!refreshToken) throw new ApiError('refreshToken is required', 400);
+  if (!refreshToken) throw new ApiError('Refresh token is required', 400);
 
   const userId = await authService.verifyRefreshToken(refreshToken);
   if (!userId) throw new ApiError('Invalid or expired refresh token', 401);
@@ -103,7 +103,7 @@ export const extensionRefresh = async (req: Request, res: Response) => {
 
 export const webLogout = async (req: Request, res: Response) => {
   const refreshToken = req.cookies.refreshToken;
-  if (!refreshToken) throw new ApiError('Refresh token cookie is missing', 400);
+  if (!refreshToken) throw new ApiError('Refresh token is required', 400);
 
   await authService.deleteRefreshToken(refreshToken);
   res.clearCookie('refreshToken', COOKIE_OPTIONS);
@@ -113,7 +113,7 @@ export const webLogout = async (req: Request, res: Response) => {
 
 export const extensionLogout = async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
-  if (!refreshToken) throw new ApiError('refreshToken is required', 400);
+  if (!refreshToken) throw new ApiError('Refresh token is required', 400);
 
   await authService.deleteRefreshToken(refreshToken);
 

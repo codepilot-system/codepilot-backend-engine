@@ -1,4 +1,5 @@
 import prisma from "../../lib/prisma";
+import { ApiError } from '../../lib/ApiError';
 import { Category, Severity, IssueStatus, SuggestionStatus } from "@prisma/client";
 
 interface CreateIssueInput {
@@ -115,7 +116,7 @@ export const applyPatch = async (issueId: number) => {
     });
 
     if (!suggestion) {
-        throw new Error('No suggestion found for this issue');
+        throw new ApiError('No suggestion found for this issue', 404);
     }
 
     // TODO: send diffPatch to VS Code extension via WebSocket

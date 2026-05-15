@@ -156,7 +156,7 @@ export const leaveProject = async (userId: number, projectId: number) => {
     });
 
     const membership = members.find(m => m.userId === userId);
-    if (!membership) throw new ApiError('You are not a member of this project', 404);
+    if (!membership) throw new ApiError('Project not found or access denied', 404);
 
     if (members.length === 1) {
       await tx.project.delete({ where: { id: projectId } });
@@ -319,7 +319,7 @@ export const syncProjectRole = async (userId: number, projectId: number) => {
     include: { project: { select: { owner: true, repoName: true, installationId: true } }, user: { select: { username: true } } }
   });
 
-  if (!membership) throw new ApiError('Project not found or you are not a member', 404);
+  if (!membership) throw new ApiError('Project not found or access denied', 404);
   if (!membership.project.installationId) throw new ApiError('GitHub App is not installed on this repository', 400);
 
   try {
@@ -356,7 +356,7 @@ export const syncProject = async (userId: number, projectId: number) => {
     }
   });
 
-  if (!membership) throw new ApiError('Project not found or you are not a member', 404);
+  if (!membership) throw new ApiError('Project not found or access denied', 404);
   if (!membership.project.installationId) throw new ApiError('GitHub App is not installed on this repository', 400);
 
   try {

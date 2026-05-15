@@ -24,7 +24,7 @@ export const connectProject = async (req: AuthRequest, res: Response) => {
   if (!userId) throw new ApiError('Unauthorized', 401);
 
   const { owner, repoName } = req.body;
-  if (!owner || !repoName) throw new ApiError('Owner and repoName are required', 400);
+  if (!owner || !repoName) throw new ApiError('Owner and repository name are required', 400);
 
   const project = await projectsService.connectProject(userId, owner, repoName);
 
@@ -58,7 +58,7 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
 
   const { name } = req.body;
   if (!name || typeof name !== 'string' || name.trim().length === 0)
-    throw new ApiError('A valid project name is required', 400);
+    throw new ApiError('Project name is required', 400);
 
   const project = await projectsService.updateProject(userId, projectId, { name: name.trim() });
 
