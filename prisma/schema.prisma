@@ -86,16 +86,20 @@ model Session {
 }
 
 model Project {
-  id             Int      @id @default(autoincrement())
-  name           String
-  repoUrl        String   @map("repo_url")
-  provider       Provider @default(GITHUB)
-  githubRepoId   BigInt   @map("github_repo_id")
-  owner          String
-  repoName       String   @map("repo_name")
-  installationId Int?     @map("installation_id")
-  lastScanDate   DateTime? @map("last_scan_date")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  repoUrl              String    @map("repo_url")
+  provider             Provider  @default(GITHUB)
+  githubRepoId         BigInt    @map("github_repo_id")
+  owner                String
+  repoName             String    @map("repo_name")
+  installationId       Int?      @map("installation_id")
+  lastScanDate         DateTime? @map("last_scan_date")
+  lastScannedCommitSha String?   @map("last_scanned_commit_sha")
+  projectSummary       String?   @map("project_summary")
+  projectBrief         String?   @map("project_brief")
+  summaryGeneratedAt   DateTime? @map("summary_generated_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
 
   members     ProjectMember[]
   scans       Scan[]
@@ -125,7 +129,11 @@ model Scan {
   projectId   Int        @map("project_id")
   initiatorId Int?       @map("initiator_id")
   branchName  String     @map("branch_name")
+  commitSha   String?    @map("commit_sha")
   status      ScanStatus @default(IN_PROGRESS)
+  modelUsed   String?    @map("model_used")
+  tokensUsed  Int?       @map("tokens_used")
+  durationMs  Int?       @map("duration_ms")
   scanDate    DateTime   @default(now()) @map("scan_date")
 
   project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -147,7 +155,7 @@ model Issue {
   severity    Severity
   category    Category
   summary     String
-  description String?
+  explanation String?
   codeSnippet String?      @map("code_snippet")
   status      IssueStatus @default(OPEN)
   detectedAt  DateTime    @default(now()) @map("detected_at")
