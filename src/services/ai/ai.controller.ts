@@ -1,4 +1,7 @@
 import { Request, Response } from 'express';
+import { getModelStatuses as getAIModelStatuses } from './ai.service';
+import { AuthRequest } from '../../middlewares/auth.middleware';
+import { ApiError } from '../../lib/ApiError';
 
 export const getSuggestions = async (req: Request, res: Response) => {
   const { projectId, scanId, issueId, status, page, limit } = req.query;
@@ -28,6 +31,19 @@ export const getSuggestions = async (req: Request, res: Response) => {
   });
 };
 
+export const getModelStatuses = async (req: Request, res: Response) => {
+  const scanType = req.query.scanType as string;
+  if (!scanType || !['local', 'repo'].includes(scanType))
+    throw new ApiError("scanType is required and must be 'local' or 'repo'", 400);
+
+  const entityId = scanType === 'local'
+    ? ((req as AuthRequest).user?.userId.toString() || req.query.userId as string)
+    : req.query.projectId as string;
+
+  const statuses = await getAIModelStatuses(scanType as 'local' | 'repo', entityId);
+  res.status(200).json({ status: "success", data: statuses });
+};
+
 export const getAIFixSuggestion = async (req: Request, res: Response) => {
   const { suggestionId } = req.params;
 
@@ -53,8 +69,8 @@ export const applySuggestion = async (req: Request, res: Response) => {
   const { suggestionId } = req.params;
   res.status(200).json({
     status: "success",
-    data: { 
-      id: parseInt(suggestionId as string), 
+    data: {
+      id: parseInt(suggestionId as string),
       status: "APPLIED",
       branchName: `codepilot/fix-${suggestionId}`
     }

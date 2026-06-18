@@ -12,7 +12,9 @@ const requiredEnvs = [
   'GITHUB_PRIVATE_KEY',
   'JWT_ACCESS_SECRET',
   'JWT_REFRESH_SECRET',
-  'ENCRYPTION_KEY'
+  'ENCRYPTION_KEY',
+  'GROQ_API_KEY',
+  'REDIS_URL',
 ];
 
 const missingEnvVars = requiredEnvs.filter(envVar => !process.env[envVar]);
@@ -40,4 +42,7 @@ export const ENV = {
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
 
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
+
+  GROQ_API_KEY: process.env.GROQ_API_KEY!,
+  REDIS_URL: process.env.REDIS_URL!,
 };

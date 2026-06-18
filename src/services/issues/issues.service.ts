@@ -6,7 +6,7 @@ interface CreateIssueInput {
     severity: Severity;
     category: Category;
     summary: string;
-    description?: string;
+    explanation?: string;
     filePath: string;
     codeSnippet?: string;
     lineNumber: number;
@@ -24,13 +24,10 @@ export const createIssues = async (issues: CreateIssueInput[], scanId: number, p
             severity: issue.severity,
             category: issue.category,
             summary: issue.summary,
-            description: issue.description,
+            explanation: issue.explanation,
             codeSnippet: issue.codeSnippet,
             status: issue.status ?? IssueStatus.OPEN
-        })
-
-
-        )
+        }))
     })
 };
 
