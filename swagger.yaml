@@ -278,7 +278,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: [{ id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", scanDate: "2026-04-10T12:00:00Z" }]
+                data: [{ id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", commitSha: "abc123def456", modelUsed: "qwen/qwen3-32b", tokensUsed: 3200, durationMs: 4500, scanDate: "2026-04-10T12:00:00Z" }]
                 pagination: { page: 1, limit: 20, total: 1 }
     post:
       tags: [Scans]
@@ -303,7 +303,7 @@ paths:
         202:
           content:
             application/json:
-              example: { status: "success", data: { id: 501, projectId: 101, initiatorId: 1, status: "IN_PROGRESS", branchName: "main", scanDate: "2026-04-10T12:00:00Z" } }
+              example: { status: "success", data: { id: 501, projectId: 101, initiatorId: 1, status: "IN_PROGRESS", branchName: "main", commitSha: null, modelUsed: null, tokensUsed: null, durationMs: null, scanDate: "2026-04-10T12:00:00Z" } }
 
   /api/scans/local-analysis:
     post:
@@ -382,7 +382,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", scanDate: "2026-04-10T12:00:00Z" }
+                data: { id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", commitSha: "abc123def456", modelUsed: "qwen/qwen3-32b", tokensUsed: 3200, durationMs: 4500, scanDate: "2026-04-10T12:00:00Z" }
     delete:
       tags: [Scans]
       parameters: 
@@ -411,7 +411,7 @@ paths:
             application/json:
               example: 
                 status: "success"
-                data: [{ id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", status: "OPEN", detectedAt: "2026-04-10T12:00:00Z" }]
+                data: [{ id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", status: "OPEN", detectedAt: "2026-04-10T12:00:00Z", suggestions: [{ id: 2001, summary: "Apply Parameterized Queries", status: "PENDING" }] }]
                 pagination: { page: 1, limit: 20, total: 1 }
 
   /api/issues/{issueId}:
@@ -424,7 +424,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "OPEN", detectedAt: "2026-04-10T12:00:00Z" }
+                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "OPEN", detectedAt: "2026-04-10T12:00:00Z", suggestions: [{ id: 2001, summary: "Apply Parameterized Queries", explanation: "Use parameterized queries to prevent SQL injection attacks.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", status: "PENDING", generatedAt: "2026-04-10T12:00:00Z" }] }
     patch:
       tags: [Issues]
       parameters: 
@@ -440,7 +440,7 @@ paths:
             application/json:
               example: 
                 status: "success"
-                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "FIXED", detectedAt: "2026-04-10T12:00:00Z" }
+                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "FIXED", detectedAt: "2026-04-10T12:00:00Z", suggestions: [{ id: 2001, summary: "Apply Parameterized Queries", explanation: "Use parameterized queries to prevent SQL injection attacks.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", status: "APPLIED", generatedAt: "2026-04-10T12:00:00Z" }] }
 
   /api/ai/suggestions:
     get:
@@ -510,6 +510,7 @@ paths:
                 data:
                   - { model: "openai/gpt-oss-20b", isAvailable: true, status: "Active", reason: null }
                   - { model: "qwen/qwen3-32b", isAvailable: false, status: "Down", reason: "currently experiencing high traffic. Please wait a minute" }
+                  - { model: "openai/gpt-oss-120b", isAvailable: false, status: "Out of Quota", reason: null }
 
   /api/analytics:
     get:
@@ -525,7 +526,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: [{ projectId: 101, scanId: 501, avgComplexity: 12.5, technicalDebtScore: 85, severityDistribution: { high: 2, medium: 5, low: 10 }, generatedAt: "2026-04-10T12:00:00Z" }]
+                data: [{ id: 3001, projectId: 101, scanId: 501, avgComplexity: 12.5, technicalDebtScore: 85, severityDistribution: { LOW: 2, MEDIUM: 5, HIGH: 10, CRITICAL: 0 }, generatedAt: "2026-04-10T12:00:00Z" }]
                 pagination: { page: 1, limit: 20, total: 1 }
 
   /api/health:
