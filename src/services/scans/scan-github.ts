@@ -12,7 +12,7 @@ export interface FetchedFile {
 }
 
 async function listScannableFilePaths(
-    installationId: number,
+    installationId: number | bigint,
     owner: string,
     repo: string,
     ref: string
@@ -48,7 +48,7 @@ async function listScannableFilePaths(
 }
 
 export async function fetchFileContent(
-    installationId: number,
+    installationId: number | bigint,
     owner: string,
     repo: string,
     path: string,
@@ -74,7 +74,7 @@ export async function fetchFileContent(
 }
 
 export async function fetchRepoFiles(
-    installationId: number,
+    installationId: number | bigint,
     owner: string,
     repo: string,
     ref: string = 'HEAD'
@@ -105,7 +105,7 @@ export async function fetchRepoFiles(
 }
 
 export async function fetchPackageJson(
-    installationId: number,
+    installationId: number | bigint,
     owner: string,
     repo: string,
     ref: string
@@ -114,7 +114,7 @@ export async function fetchPackageJson(
     return content !== null ? { filePath: 'package.json', content } : null;
 }
 export async function getLatestCommitSha(
-    installationId: number,
+    installationId: number | bigint,
     owner: string,
     repo: string,
     branch: string

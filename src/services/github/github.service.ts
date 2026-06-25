@@ -95,19 +95,19 @@ export const parseGithubUrl = (repoUrl: string): { owner: string; repoName: stri
     };
 };
 
-export const getInstallationOctokit = async (installationId: number) => {
+export const getInstallationOctokit = async (installationId: number | bigint) => {
     try {
-        return await githubApp.getInstallationOctokit(installationId);
+        return await githubApp.getInstallationOctokit(Number(installationId));
     } catch {
         throw new ApiError(`Failed to authenticate as GitHub App installation ${installationId}`, 500);
     }
 };
 
-export const getInstallationToken = async (installationId: number): Promise<string> => {
+export const getInstallationToken = async (installationId: number | bigint): Promise<string> => {
     try {
         const auth = await githubApp.octokit.auth({
             type: 'installation',
-            installationId,
+            installationId: Number(installationId),
         }) as { token: string };
         return auth.token;
     } catch {

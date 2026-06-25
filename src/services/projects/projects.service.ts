@@ -180,7 +180,7 @@ export const upsertProjectWithMember = async (params: {
     owner: string;
     repoName: string;
     repoUrl: string;
-    installationId: number;
+    installationId: number | bigint;
     userId: number;
     role: Role;
 }) => {
@@ -281,7 +281,7 @@ export const discoverProjects = async (userId: number, page: number = 1, limit: 
         }
 
         return {
-            githubId: repo.id,
+            githubId: BigInt(repo.id),
             name: repo.name,
             owner: repo.owner.login,
             fullName: repo.full_name,

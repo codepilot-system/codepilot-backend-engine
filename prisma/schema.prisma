@@ -63,7 +63,7 @@ enum Provider {
 
 model User {
   id                   Int       @id @default(autoincrement())
-  githubId             String    @unique @map("github_id")
+  githubId             BigInt    @unique @map("github_id")
   email                String?   @unique
   username             String    @unique
   avatarUrl            String?   @map("avatar_url")
@@ -95,10 +95,10 @@ model Project {
   name                 String
   repoUrl              String    @map("repo_url")
   provider             Provider  @default(GITHUB)
-  githubRepoId         BigInt    @map("github_repo_id")
+  githubRepoId         BigInt    @unique @map("github_repo_id")
   owner                String
   repoName             String    @map("repo_name")
-  installationId       Int?      @map("installation_id")
+  installationId       BigInt?   @map("installation_id")
   lastScanDate         DateTime? @map("last_scan_date")
   lastScannedCommitSha String?   @map("last_scanned_commit_sha")
   projectSummary       String?   @map("project_summary")

@@ -3,7 +3,7 @@ import prisma from '../../lib/prisma';
 import { syncProjectRole } from '../projects/projects.service';
 
 githubApp.webhooks.on('installation_repositories.removed', async ({ payload }) => {
-    const installationId = payload.installation.id;
+    const installationId = BigInt(payload.installation.id);
     const repositoriesRemoved = payload.repositories_removed || [];
 
     const repoIds = repositoriesRemoved.map(repo => BigInt(repo.id));
@@ -19,7 +19,7 @@ githubApp.webhooks.on('installation_repositories.removed', async ({ payload }) =
 });
 
 githubApp.webhooks.on('installation.deleted', async ({ payload }) => {
-    const installationId = payload.installation.id;
+    const installationId = BigInt(payload.installation.id);
 
     await prisma.project.updateMany({
         where: { installationId },
@@ -56,7 +56,7 @@ githubApp.webhooks.on('repository', async ({ payload }) => {
 });
 
 githubApp.webhooks.on('installation_repositories.added', async ({ payload }) => {
-    const installationId = payload.installation.id;
+    const installationId = BigInt(payload.installation.id);
     const repositoriesAdded = payload.repositories_added || [];
 
     if (repositoriesAdded.length === 0) return;
@@ -87,7 +87,7 @@ githubApp.webhooks.on('member', async ({ payload }) => {
     if (!payload.repository?.id || !payload.member?.id) return;
 
     const githubRepoId = BigInt(payload.repository.id);
-    const githubUserId = payload.member.id.toString();
+    const githubUserId = BigInt(payload.member.id);
 
     const user = await prisma.user.findUnique({ where: { githubId: githubUserId } });
     if (!user) return;

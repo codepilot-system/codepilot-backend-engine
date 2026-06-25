@@ -19,6 +19,20 @@ components:
   securitySchemes:
     BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
 
+  schemas:
+    ProjectProvider:
+      type: string
+      enum: [GITHUB]
+    MemberRole:
+      type: string
+      enum: [ADMIN, MEMBER]
+    DiscoverStatus:
+      type: string
+      enum: [IMPORT, JOIN, JOINED]
+    IssueSource:
+      type: string
+      enum: [AI, ANALYZER]
+
 security:
   - BearerAuth: []
 
@@ -48,7 +62,7 @@ paths:
             Set-Cookie: { schema: { type: string, example: "refreshToken=abcde12345; Path=/; HttpOnly; Secure; SameSite=None" } }
           content:
             application/json:
-              example: { status: "success", data: { accessToken: "access-token-sample", user: { id: 1, githubId: 10001, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
+              example: { status: "success", data: { accessToken: "access-token-sample", user: { id: 1, githubId: "10001", username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
 
   /api/auth/web/refresh:
     post:
@@ -85,7 +99,7 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { accessToken: "access-token-sample", refreshToken: "refresh-token-sample", user: { id: 1, githubId: 10001, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
+              example: { status: "success", data: { accessToken: "access-token-sample", refreshToken: "refresh-token-sample", user: { id: 1, githubId: "10001", username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
 
   /api/auth/extension/refresh:
     post:
@@ -126,7 +140,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 1, githubId: 10001, username: "sample-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
+                data: { id: 1, githubId: "10001", username: "sample-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
     delete:
       tags: [Users]
       parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
@@ -147,7 +161,7 @@ paths:
               example:
                 status: "success"
                 message: "Profile synced with GitHub successfully"
-                data: { id: 1, githubId: 10001, username: "synced-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
+                data: { id: 1, githubId: "10001", username: "synced-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
 
   /api/projects:
     get:
@@ -161,7 +175,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: [{ id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: 12345678, lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }]
+                data: [{ id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: "12345678", lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }]
                 pagination: { page: 1, limit: 30, total: 1 }
     post:
       tags: [Projects]
@@ -176,7 +190,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 102, name: "Hello-World", repoUrl: "https://github.com/octocat/Hello-World", provider: "GITHUB", githubRepoId: "1296269", owner: "octocat", repoName: "Hello-World", installationId: 87654321, lastScanDate: null, createdAt: "2026-05-10T12:00:00.000Z" }
+                data: { id: 102, name: "Hello-World", repoUrl: "https://github.com/octocat/Hello-World", provider: "GITHUB", githubRepoId: "1296269", owner: "octocat", repoName: "Hello-World", installationId: "87654321", lastScanDate: null, createdAt: "2026-05-10T12:00:00.000Z" }
 
   /api/projects/discover:
     get:
@@ -191,7 +205,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: [{ githubId: 1296269, name: "Hello-World", owner: "octocat", fullName: "octocat/Hello-World", url: "https://github.com/octocat/Hello-World", description: "My first repository on GitHub!", private: false, isAdmin: true, status: "IMPORT", projectId: null }]
+                data: [{ githubId: "1296269", name: "Hello-World", owner: "octocat", fullName: "octocat/Hello-World", url: "https://github.com/octocat/Hello-World", description: "My first repository on GitHub!", private: false, isAdmin: true, status: "IMPORT", projectId: null }]
                 pagination: { page: 1, limit: 30, total: null }
 
   /api/projects/{projectId}/members:
@@ -206,6 +220,19 @@ paths:
                 status: "success"
                 data: [{ userId: 1, username: "alice", avatarUrl: "https://avatars.githubusercontent.com/u/1", role: "ADMIN" }]
 
+  /api/projects/{projectId}/branches:
+    get:
+      tags: [Projects]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ name: "main", isDefault: true }, { name: "dev", isDefault: false }]
+
   /api/projects/{projectId}:
     get:
       tags: [Projects]
@@ -216,7 +243,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: 12345678, lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }
+                data: { id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: "12345678", lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }
     patch:
       tags: [Projects]
       parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
@@ -230,7 +257,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 101, name: "updated-name", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: 12345678, lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z" }
+                data: { id: 101, name: "updated-name", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: "12345678", lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z" }
     delete:
       tags: [Projects]
       parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
@@ -271,14 +298,14 @@ paths:
         - { in: query, name: projectId, required: true, schema: { type: integer } }
         - { in: query, name: status, required: false, schema: { type: string, enum: [IN_PROGRESS, COMPLETED, FAILED] } }
         - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
       responses:
         200:
           content:
             application/json:
               example:
                 status: "success"
-                data: [{ id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", scanDate: "2026-04-10T12:00:00Z" }]
+                data: [{ id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", failureReason: null, branchName: "main", _count: { issues: 12 }, scanDate: "2026-04-10T12:00:00Z" }]
                 pagination: { page: 1, limit: 20, total: 1 }
     post:
       tags: [Scans]
@@ -303,7 +330,7 @@ paths:
         202:
           content:
             application/json:
-              example: { status: "success", data: { id: 501, projectId: 101, initiatorId: 1, status: "IN_PROGRESS", branchName: "main", scanDate: "2026-04-10T12:00:00Z" } }
+              example: { status: "success", data: { id: 501, projectId: 101, initiatorId: 1, status: "IN_PROGRESS", failureReason: null, branchName: "main", scanDate: "2026-04-10T12:00:00Z" } }
 
   /api/scans/local-analysis:
     post:
@@ -382,7 +409,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", scanDate: "2026-04-10T12:00:00Z" }
+                data: { id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", failureReason: null, branchName: "main", scanDate: "2026-04-10T12:00:00Z" }
     delete:
       tags: [Scans]
       parameters: 
@@ -394,6 +421,25 @@ paths:
             application/json:
               example: { status: "success", message: "Scan deleted successfully" }
 
+  /api/issues/bulk:
+    patch:
+      tags: [Issues]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issueIds, status]
+              properties:
+                issueIds: { type: array, items: { type: integer } }
+                status: { type: string, enum: [OPEN, FIXED, IGNORED] }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { updatedCount: 5, failedIds: [] } }
+
   /api/issues:
     get:
       tags: [Issues]
@@ -403,15 +449,18 @@ paths:
         - { in: query, name: status, required: false, schema: { type: string, enum: [OPEN, FIXED, IGNORED] } }
         - { in: query, name: severity, required: false, schema: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] } }
         - { in: query, name: category, required: false, schema: { type: string, enum: [CODE_SMELL, DEAD_CODE, DUPLICATE, COMPLEXITY, SRP_VIOLATION, SECURITY, PERFORMANCE, FUNCTIONALITY, OTHER] } }
+        - { in: query, name: search, required: false, schema: { type: string } }
+        - { in: query, name: sortBy, required: false, schema: { type: string, enum: [detectedAt, severity, category] } }
+        - { in: query, name: sortDirection, required: false, schema: { type: string, enum: [asc, desc], default: desc } }
         - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
       responses:
         200:
           content:
             application/json:
               example: 
                 status: "success"
-                data: [{ id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", status: "OPEN", detectedAt: "2026-04-10T12:00:00Z" }]
+                data: [{ id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", status: "OPEN", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z" }]
                 pagination: { page: 1, limit: 20, total: 1 }
 
   /api/issues/{issueId}:
@@ -424,7 +473,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "OPEN", detectedAt: "2026-04-10T12:00:00Z" }
+                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "OPEN", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z" }
     patch:
       tags: [Issues]
       parameters: 
@@ -440,7 +489,44 @@ paths:
             application/json:
               example: 
                 status: "success"
-                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "FIXED", detectedAt: "2026-04-10T12:00:00Z" }
+                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "FIXED", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z" }
+
+  /api/ai/suggestions/bulk-apply:
+    post:
+      tags: [AI]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suggestionIds]
+              properties:
+                suggestionIds: { type: array, items: { type: integer } }
+                branchName: { type: string }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { branchName: "codepilot/batch-fixes", appliedCount: 5, failedIds: [] } }
+
+  /api/ai/suggestions/bulk-dismiss:
+    post:
+      tags: [AI]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suggestionIds]
+              properties:
+                suggestionIds: { type: array, items: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { dismissedCount: 5, failedIds: [] } }
 
   /api/ai/suggestions:
     get:
@@ -451,7 +537,7 @@ paths:
         - { in: query, name: issueId, required: false, schema: { type: integer } }
         - { in: query, name: status, required: false, schema: { type: string, enum: [PENDING, APPLIED, DISMISSED] } }
         - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
       responses:
         200:
           content:
@@ -468,7 +554,7 @@ paths:
             application/json:
               example:
                 status: "success"
-                data: { id: 2001, projectId: 101, scanId: 501, issueId: 901, status: "PENDING", summary: "Apply Parameterized Queries", explanation: "Sample detailed explanation of the AI suggestion.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", generatedAt: "2026-04-10T12:00:00Z" }
+                data: { id: 2001, projectId: 101, scanId: 501, issueId: 901, status: "PENDING", summary: "Apply Parameterized Queries", explanation: "Sample detailed explanation of the AI suggestion.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", modelUsed: "openai/gpt-oss-20b", generatedAt: "2026-04-10T12:00:00Z" }
 
   /api/ai/suggestions/{suggestionId}/apply:
     post:
@@ -511,6 +597,28 @@ paths:
                   - { model: "openai/gpt-oss-20b", isAvailable: true, status: "Active", reason: null }
                   - { model: "qwen/qwen3-32b", isAvailable: false, status: "Down", reason: "currently experiencing high traffic. Please wait a minute" }
 
+  /api/analytics/summary:
+    get:
+      tags: [Analytics]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  totalScans: 12
+                  totalIssuesDetected: 47
+                  openIssues: 24
+                  latestDebtScore: 85
+                  categoryDistribution: { SECURITY: 5, CODE_SMELL: 12 }
+                  severityDistribution: { CRITICAL: 2, HIGH: 10, MEDIUM: 20, LOW: 15 }
+                  trend:
+                    - { scanId: 498, debtScore: 120, date: "2026-03-01T12:00:00Z" }
+                    - { scanId: 501, debtScore: 85, date: "2026-04-10T12:00:00Z" }
+
   /api/analytics:
     get:
       tags: [Analytics]
@@ -518,7 +626,7 @@ paths:
         - { in: query, name: projectId, required: true, schema: { type: integer } }
         - { in: query, name: scanId, required: false, schema: { type: integer } }
         - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
       responses:
         200:
           content:
