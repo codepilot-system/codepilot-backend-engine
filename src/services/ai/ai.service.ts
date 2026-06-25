@@ -3,6 +3,13 @@ import { ENV } from '../../config/env.config';
 import { ApiError } from '../../lib/ApiError';
 import { ScanIssue, AnalysisResult, CodeFile, ImportedFileSkeleton, ScanType } from './ai.types';
 import { checkDailyQuota, recordDailyQuota, tripCircuitBreaker, getCircuitBreakerStatus, LOCAL_MODELS, REPO_MODELS, MODELS_BY_SCAN_TYPE, MODEL_TOKEN_LIMITS, COOLDOWN_MESSAGES, SUMMARY_MODEL } from './ai.limiter';
+import { applyPatch } from 'diff';
+import prisma from '../../lib/prisma';
+import { SuggestionStatus, IssueStatus } from '@prisma/client';
+import { getInstallationOctokit } from '../github/github.service';
+import { fetchFileContent } from '../scans/scan-github';
+
+
 
 export type { ScanIssue, AnalysisResult, CodeFile, ImportedFileSkeleton, ScanType } from './ai.types';
 export { LOCAL_MODELS, REPO_MODELS, getModelStatuses } from './ai.limiter';
@@ -98,7 +105,6 @@ async function runAnalysis(
     importedContext?: ImportedFileSkeleton[],
     folderTree?: string,
     dependencies?: string,
-    staticFindings?: string,
 ): Promise<AnalysisResult> {
     if (!files.length) throw new ApiError('At least one file is required for analysis', 400);
 
@@ -131,7 +137,6 @@ async function runAnalysis(
     if (folderTree) prompt += `\n\nProject Folder Structure:\n${folderTree}`;
     if (dependencies) prompt += `\n\nInstalled Dependencies:\n${dependencies}`;
 
-    if (staticFindings) prompt += `\n\n${staticFindings}`;
     if (importedContext?.length) {
         const contextBlocks = importedContext
             .map((ctx) => `<imported-context path="${ctx.filePath}">\n${ctx.skeleton}\n</imported-context>`)
@@ -216,13 +221,13 @@ async function runAnalysis(
 
 export function analyzeLocalScan(files: CodeFile[], userId: string, preferredModel?: string, projectBrief?: string, staticFindings?: string): Promise<AnalysisResult> {
     if (!userId) throw new ApiError('A valid user ID is required to perform a local scan.', 400);
-    return runAnalysis('local', files, userId, preferredModel, projectBrief, undefined, undefined, undefined, staticFindings);
+    return runAnalysis('local', files, userId, preferredModel, projectBrief, undefined, undefined, undefined);
 }
 
 export function analyzeRepoScan(files: CodeFile[], projectId: string, preferredModel?: string, projectSummary?: string, importedContext?: ImportedFileSkeleton[], folderTree?: string, dependencies?: string, staticFindings?: string)
     : Promise<AnalysisResult> {
     if (!projectId) throw new ApiError('A valid project ID is required to perform a repo scan.', 400);
-    return runAnalysis('repo', files, projectId, preferredModel, projectSummary, importedContext, folderTree, dependencies, staticFindings);
+    return runAnalysis('repo', files, projectId, preferredModel, projectSummary, importedContext, folderTree, dependencies);
 }
 
 export async function generateProjectSummary(files: CodeFile[], folderTree?: string, dependencies?: string): Promise<{ summary: string; brief: string; modelUsed: string; tokensUsed: number; durationMs: number }> {
@@ -284,4 +289,146 @@ export async function generateProjectSummary(files: CodeFile[], folderTree?: str
         await tripCircuitBreaker(model, error);
         throw new ApiError('Failed to generate project summary. Please try again later.', 503);
     }
+}
+
+
+
+
+
+
+export async function applyAISuggestion(
+    suggestionId: number
+): Promise<{ id: number; status: SuggestionStatus; branchName: string; prUrl: string }> {
+
+    // 1. Load suggestion + issue + scan + project in one go
+    const suggestion = await prisma.suggestion.findUnique({
+        where: { id: suggestionId },
+        include: {
+            issue: true,
+            scan: {
+                include: { project: true },
+            },
+        },
+    });
+
+    if (!suggestion) throw new ApiError('Suggestion not found', 404);
+    if (suggestion.status === SuggestionStatus.APPLIED)
+        throw new ApiError('Suggestion has already been applied', 409);
+
+    const { issue, scan } = suggestion;
+    const { project } = scan;
+
+    if (!project.installationId)
+        throw new ApiError('GitHub App is not installed on this repository', 422);
+
+    if (!scan.commitSha)
+        throw new ApiError('Scan has no associated commit SHA — cannot apply patch', 422);
+
+    // 2. Re-fetch the current file content from GitHub at the scan's commit
+    const currentContent = await fetchFileContent(
+        project.installationId,
+        project.owner,
+        project.repoName,
+        issue.filePath,
+        scan.commitSha
+    );
+
+    if (currentContent === null)
+        throw new ApiError(`Could not fetch file ${issue.filePath} from GitHub`, 502);
+
+    // 3. Apply the unified diff patch to the file content
+    const patchedContent = applyPatch(currentContent, suggestion.diffPatch);
+
+    if (patchedContent === false)
+        throw new ApiError(
+            `Patch could not be applied cleanly to ${issue.filePath}. ` +
+            `The file may have changed since the scan was run.`,
+            409
+        );
+
+    // 4. Create a new branch off the scan commit
+    const branchName = `codepilot/fix-${suggestionId}`;
+    const octokit = await getInstallationOctokit(project.installationId);
+
+    await octokit.request('POST /repos/{owner}/{repo}/git/refs', {
+        owner: project.owner,
+        repo: project.repoName,
+        ref: `refs/heads/${branchName}`,
+        sha: scan.commitSha,
+        request: { signal: AbortSignal.timeout(15000) },
+    });
+
+    // 5. Get the current file's blob SHA (required by the GitHub contents API to update a file)
+    const { data: fileData } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner: project.owner,
+        repo: project.repoName,
+        path: issue.filePath,
+        ref: scan.commitSha,
+        request: { signal: AbortSignal.timeout(15000) },
+    });
+
+    if (Array.isArray(fileData) || !('sha' in fileData))
+        throw new ApiError(`Unexpected response fetching file SHA for ${issue.filePath}`, 502);
+
+    // 6. Commit the patched file to the new branch
+    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+        owner: project.owner,
+        repo: project.repoName,
+        path: issue.filePath,
+        message: `fix(codepilot): ${issue.summary}`,
+        content: Buffer.from(patchedContent).toString('base64'),
+        sha: fileData.sha,
+        branch: branchName,
+        request: { signal: AbortSignal.timeout(15000) },
+    });
+
+    // 7. Open a PR from the new branch into the scan's branch
+    const { data: pr } = await octokit.request('POST /repos/{owner}/{repo}/pulls', {
+        owner: project.owner,
+        repo: project.repoName,
+        title: `[CodePilot] ${issue.summary}`,
+        body: `## CodePilot Auto-Fix\n\n**Issue:** ${issue.summary}\n\n**Explanation:** ${issue.explanation ?? ''}\n\n---\n*Applied by CodePilot from scan \`${scan.commitSha?.slice(0, 7)}\`*`,
+        head: branchName,
+        base: scan.branchName,
+        request: { signal: AbortSignal.timeout(15000) },
+    });
+
+    // 8. Mark suggestion APPLIED and issue FIXED atomically
+    const [updated] = await prisma.$transaction([
+        prisma.suggestion.update({
+            where: { id: suggestionId },
+            data: { status: SuggestionStatus.APPLIED },
+        }),
+        prisma.issue.update({
+            where: { id: issue.id },
+            data: { status: IssueStatus.FIXED },
+        }),
+    ]);
+
+    return {
+        id: updated.id,
+        status: updated.status,
+        branchName,
+        prUrl: pr.html_url,
+    };
+}
+
+export async function dismissAISuggestion(
+    suggestionId: number
+): Promise<{ id: number; status: SuggestionStatus }> {
+
+    const suggestion = await prisma.suggestion.findUnique({
+        where: { id: suggestionId },
+    });
+
+    if (!suggestion) throw new ApiError('Suggestion not found', 404);
+    if (suggestion.status === SuggestionStatus.DISMISSED)
+        throw new ApiError('Suggestion has already been dismissed', 409);
+
+    const updated = await prisma.suggestion.update({
+        where: { id: suggestionId },
+        data: { status: SuggestionStatus.DISMISSED },
+    });
+
+    return { id: updated.id, status: updated.status };
 }

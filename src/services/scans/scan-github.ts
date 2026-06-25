@@ -47,7 +47,7 @@ async function listScannableFilePaths(
     return paths.slice(0, MAX_FILES_PER_SCAN);
 }
 
-async function fetchFileContent(
+export async function fetchFileContent(
     installationId: number,
     owner: string,
     repo: string,

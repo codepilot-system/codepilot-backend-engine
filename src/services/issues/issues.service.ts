@@ -1,6 +1,6 @@
 import prisma from "../../lib/prisma";
 import { ApiError } from '../../lib/ApiError';
-import { Category, Severity, IssueStatus, SuggestionStatus } from "@prisma/client";
+import { Category, Severity, IssueStatus, SuggestionStatus, IssueSource } from "@prisma/client";
 
 interface CreateIssueInput {
     severity: Severity;
@@ -11,6 +11,7 @@ interface CreateIssueInput {
     codeSnippet?: string;
     lineNumber: number;
     status?: IssueStatus;
+    source?: IssueSource;
 }
 
 export const createIssues = async (issues: CreateIssueInput[], scanId: number, projectId: number) => {
@@ -26,7 +27,8 @@ export const createIssues = async (issues: CreateIssueInput[], scanId: number, p
             summary: issue.summary,
             explanation: issue.explanation,
             codeSnippet: issue.codeSnippet,
-            status: issue.status ?? IssueStatus.OPEN
+            status: issue.status ?? IssueStatus.OPEN,
+            source: issue.source ?? IssueSource.ANALYZER,
         }))
     })
 };

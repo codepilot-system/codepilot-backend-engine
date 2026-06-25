@@ -1,4 +1,5 @@
-export type IssueType = 'LONG_FUNCTION' | 'DEEP_NESTING' | 'SRP_VIOLATION' | 'DUPLICATE';
+export type IssueType = 'LONG_FUNCTION' | 'DEEP_NESTING' | 'SRP_VIOLATION' | 'DUPLICATE' | 'HIGH_COMPLEXITY';
+
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface FunctionFinding {
@@ -50,5 +51,6 @@ export interface LanguageRules {
     functionNodes: string[];
     nestingNodes: string[];
     callNodes: string[];
+    ccNodes: string[];
     language: any;
 }

@@ -25,6 +25,11 @@ enum IssueStatus {
   IGNORED
 }
 
+enum IssueSource {
+    AI
+    ANALYZER
+}
+
 enum SuggestionStatus {
   PENDING
   APPLIED
@@ -158,6 +163,7 @@ model Issue {
   explanation String?
   codeSnippet String?      @map("code_snippet")
   status      IssueStatus @default(OPEN)
+  source      IssueSource @default(ANALYZER)
   detectedAt  DateTime    @default(now()) @map("detected_at")
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
