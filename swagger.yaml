@@ -642,103 +642,173 @@ paths:
                                     message: "Successfully left the project",
                                 }
 
-  /api/scans:
-    get:
-      tags: [Scans]
-      parameters:
-        - { in: query, name: projectId, required: true, schema: { type: integer } }
-        - { in: query, name: status, required: false, schema: { type: string, enum: [IN_PROGRESS, COMPLETED, FAILED] } }
-        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, required: false, schema: { type: integer, default: 20 } }
-      responses:
-        200:
-          content:
-            application/json:
-              example:
-                status: "success"
-                data: [{ id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", branchName: "main", scanDate: "2026-04-10T12:00:00Z" }]
-                pagination: { page: 1, limit: 20, total: 1 }
-    post:
-      tags: [Scans]
-      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [projectId, branchName]
-              properties:
-                projectId: { type: integer }
-                branchName: { type: string }
-                preferredModel:
-                  type: string
-                  enum:
-                    - "meta-llama/llama-4-scout-17b-16e-instruct"
-                    - "groq/compound"
-                    - "qwen/qwen3-32b"
-                    - "openai/gpt-oss-120b"
-      responses:
-        202:
-          content:
-            application/json:
-              example: { status: "success", data: { id: 501, projectId: 101, initiatorId: 1, status: "IN_PROGRESS", branchName: "main", scanDate: "2026-04-10T12:00:00Z" } }
+    /api/scans:
+        get:
+            tags: [Scans]
+            parameters:
+                - {
+                      in: query,
+                      name: projectId,
+                      required: true,
+                      schema: { type: integer },
+                  }
+                - {
+                      in: query,
+                      name: status,
+                      required: false,
+                      schema:
+                          {
+                              type: string,
+                              enum: [IN_PROGRESS, COMPLETED, FAILED],
+                          },
+                  }
+                - {
+                      in: query,
+                      name: page,
+                      required: false,
+                      schema: { type: integer, default: 1 },
+                  }
+                - {
+                      in: query,
+                      name: limit,
+                      required: false,
+                      schema: { type: integer, default: 20 },
+                  }
+            responses:
+                200:
+                    content:
+                        application/json:
+                            example:
+                                status: "success"
+                                data:
+                                    [
+                                        {
+                                            id: 501,
+                                            projectId: 101,
+                                            initiatorId: 1,
+                                            status: "COMPLETED",
+                                            branchName: "main",
+                                            commitSha: "abc123def456",
+                                            modelUsed: "qwen/qwen3-32b",
+                                            tokensUsed: 3200,
+                                            durationMs: 4500,
+                                            scanDate: "2026-04-10T12:00:00Z",
+                                        },
+                                    ]
+                                pagination: { page: 1, limit: 20, total: 1 }
+        post:
+            tags: [Scans]
+            parameters:
+                [
+                    {
+                        in: header,
+                        name: X-Requested-With,
+                        required: true,
+                        schema: { type: string, default: XMLHttpRequest },
+                    },
+                ]
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [projectId, branchName]
+                            properties:
+                                projectId: { type: integer }
+                                branchName: { type: string }
+                                preferredModel:
+                                    type: string
+                                    enum:
+                                        - "meta-llama/llama-4-scout-17b-16e-instruct"
+                                        - "groq/compound"
+                                        - "qwen/qwen3-32b"
+                                        - "openai/gpt-oss-120b"
+            responses:
+                202:
+                    content:
+                        application/json:
+                            example:
+                                {
+                                    status: "success",
+                                    data:
+                                        {
+                                            id: 501,
+                                            projectId: 101,
+                                            initiatorId: 1,
+                                            status: "IN_PROGRESS",
+                                            branchName: "main",
+                                            commitSha: null,
+                                            modelUsed: null,
+                                            tokensUsed: null,
+                                            durationMs: null,
+                                            scanDate: "2026-04-10T12:00:00Z",
+                                        },
+                                }
 
-  /api/scans/local-analysis:
-    post:
-      tags: [Scans]
-      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [files]
-              properties:
-                projectId: { type: integer }
-                files:
-                  type: array
-                  items:
-                    type: object
-                    required: [path, content]
-                    properties:
-                      path: { type: string }
-                      content: { type: string }
-                      selectedLines:
-                        type: array
-                        items:
-                          type: object
-                          required: [start, end]
-                          properties:
-                            start: { type: integer }
-                            end: { type: integer }
-                preferredModel:
-                  type: string
-                  enum:
-                    - "llama-3.1-8b-instant"
-                    - "openai/gpt-oss-20b"
-                    - "qwen/qwen3-32b"
-                    - "qwen/qwen3.6-27b"
-      responses:
-        201:
-          content:
-            application/json:
-              example:
-                status: "success"
-                data:
-                  issues:
-                    - filePath: "src/auth.ts"
-                      lineNumber: 10
-                      severity: "HIGH"
-                      category: "SECURITY"
-                      summary: "SQL Injection found in login endpoint"
-                      codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)"
-                      suggestions:
-                        - summary: "Apply Parameterized Queries"
-                          explanation: "Sample detailed explanation of the AI suggestion."
-                          diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);"
-                  modelUsed: "openai/gpt-oss-20b"
-                  tokensUsed: 1250
-                  durationMs: 2320
+    /api/scans/local-analysis:
+        post:
+            tags: [Scans]
+            parameters:
+                [
+                    {
+                        in: header,
+                        name: X-Requested-With,
+                        required: true,
+                        schema: { type: string, default: XMLHttpRequest },
+                    },
+                ]
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [files]
+                            properties:
+                                projectId: { type: integer }
+                                files:
+                                    type: array
+                                    items:
+                                        type: object
+                                        required: [path, content]
+                                        properties:
+                                            path: { type: string }
+                                            content: { type: string }
+                                            selectedLines:
+                                                type: array
+                                                items:
+                                                    type: object
+                                                    required: [start, end]
+                                                    properties:
+                                                        start: { type: integer }
+                                                        end: { type: integer }
+                                preferredModel:
+                                    type: string
+                                    enum:
+                                        - "llama-3.1-8b-instant"
+                                        - "openai/gpt-oss-20b"
+                                        - "qwen/qwen3-32b"
+                                        - "qwen/qwen3.6-27b"
+            responses:
+                201:
+                    content:
+                        application/json:
+                            example:
+                                status: "success"
+                                data:
+                                    issues:
+                                        - filePath: "src/auth.ts"
+                                          lineNumber: 10
+                                          severity: "HIGH"
+                                          category: "SECURITY"
+                                          summary: "SQL Injection found in login endpoint"
+                                          codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)"
+                                          suggestions:
+                                              - summary: "Apply Parameterized Queries"
+                                                explanation: "Sample detailed explanation of the AI suggestion."
+                                                diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);"
+                                    modelUsed: "openai/gpt-oss-20b"
+                                    tokensUsed: 1250
+                                    durationMs: 2320
 
     /api/scans/{scanId}/report:
         get:
@@ -783,6 +853,10 @@ paths:
                                         initiatorId: 1,
                                         status: "COMPLETED",
                                         branchName: "main",
+                                        commitSha: "abc123def456",
+                                        modelUsed: "qwen/qwen3-32b",
+                                        tokensUsed: 3200,
+                                        durationMs: 4500,
                                         scanDate: "2026-04-10T12:00:00Z",
                                     }
         delete:
@@ -846,7 +920,6 @@ paths:
                       schema:
                           {
                               type: string,
-
                               enum:
                                   [
                                       CODE_SMELL,
@@ -856,10 +929,17 @@ paths:
                                       SRP_VIOLATION,
                                       SECURITY,
                                       PERFORMANCE,
+                                      FUNCTIONALITY,
+                                      OTHER,
                                   ],
                           },
                   }
-
+                - {
+                      in: query,
+                      name: source,
+                      required: false,
+                      schema: { type: string, enum: [AI, ANALYZER] },
+                  }
                 - {
                       in: query,
                       name: page,
@@ -887,8 +967,17 @@ paths:
                                             severity: "HIGH",
                                             category: "SECURITY",
                                             summary: "SQL Injection found in login endpoint",
+                                            source: "AI",
                                             status: "OPEN",
                                             detectedAt: "2026-04-10T12:00:00Z",
+                                            suggestions:
+                                                [
+                                                    {
+                                                        id: 2001,
+                                                        summary: "Apply Parameterized Queries",
+                                                        status: "PENDING",
+                                                    },
+                                                ],
                                         },
                                     ]
                                 pagination: { page: 1, limit: 20, total: 1 }
@@ -919,12 +1008,24 @@ paths:
                                         severity: "HIGH",
                                         category: "SECURITY",
                                         summary: "SQL Injection found in login endpoint",
-                                        description: "Sample detailed description of the detected issue.",
+                                        explanation: "Sample detailed explanation of the detected issue.",
                                         filePath: "src/auth.ts",
                                         codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)",
                                         lineNumber: 42,
+                                        source: "AI",
                                         status: "OPEN",
                                         detectedAt: "2026-04-10T12:00:00Z",
+                                        suggestions:
+                                            [
+                                                {
+                                                    id: 2001,
+                                                    summary: "Apply Parameterized Queries",
+                                                    explanation: "Use parameterized queries to prevent SQL injection attacks.",
+                                                    diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);",
+                                                    status: "PENDING",
+                                                    generatedAt: "2026-04-10T12:00:00Z",
+                                                },
+                                            ],
                                     }
         patch:
             tags: [Issues]
@@ -970,38 +1071,26 @@ paths:
                                         severity: "HIGH",
                                         category: "SECURITY",
                                         summary: "SQL Injection found in login endpoint",
-                                        description: "Sample detailed description of the detected issue.",
+                                        explanation: "Sample detailed explanation of the detected issue.",
                                         filePath: "src/auth.ts",
                                         codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)",
                                         lineNumber: 42,
+                                        source: "AI",
                                         status: "FIXED",
                                         detectedAt: "2026-04-10T12:00:00Z",
+                                        suggestions:
+                                            [
+                                                {
+                                                    id: 2001,
+                                                    summary: "Apply Parameterized Queries",
+                                                    explanation: "Use parameterized queries to prevent SQL injection attacks.",
+                                                    diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);",
+                                                    status: "APPLIED",
+                                                    generatedAt: "2026-04-10T12:00:00Z",
+                                                },
+                                            ],
                                     }
-    /api/issues/{issueId}/apply:
-        post:
-            tags: [Issues]
-            parameters:
-                - {
-                      in: path,
-                      name: issueId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: header,
-                      name: X-Requested-With,
-                      required: true,
-                      schema: { type: string, default: XMLHttpRequest },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "Patch applied successfully",
-                                }
+
     /api/ai/suggestions:
         get:
             tags: [AI]
@@ -1125,42 +1214,83 @@ paths:
                                             id: 2001,
                                             status: "APPLIED",
                                             branchName: "codepilot/fix-2001",
+                                            prUrl: "https://github.com/org/sample-project/pull/42",
                                         },
                                 }
 
-  /api/ai/statuses:
-    get:
-      tags: [AI]
-      parameters:
-        - { in: query, name: scanType, required: true, schema: { type: string, enum: [local, repo] } }
-        - { in: query, name: userId, required: false, schema: { type: string } }
-        - { in: query, name: projectId, required: false, schema: { type: string } }
-      responses:
-        200:
-          content:
-            application/json:
-              example:
-                status: "success"
-                data:
-                  - { model: "openai/gpt-oss-20b", isAvailable: true, status: "Active", reason: null }
-                  - { model: "qwen/qwen3-32b", isAvailable: false, status: "Down", reason: "currently experiencing high traffic. Please wait a minute" }
+    /api/ai/suggestions/{suggestionId}/dismiss:
+        post:
+            tags: [AI]
+            parameters:
+                - {
+                      in: path,
+                      name: suggestionId,
+                      required: true,
+                      schema: { type: integer },
+                  }
+                - {
+                      in: header,
+                      name: X-Requested-With,
+                      required: true,
+                      schema: { type: string, default: XMLHttpRequest },
+                  }
+            responses:
+                200:
+                    content:
+                        application/json:
+                            example:
+                                {
+                                    status: "success",
+                                    data: { id: 2001, status: "DISMISSED" },
+                                }
 
-  /api/analytics:
-    get:
-      tags: [Analytics]
-      parameters:
-        - { in: query, name: projectId, required: true, schema: { type: integer } }
-        - { in: query, name: scanId, required: false, schema: { type: integer } }
-        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
-        - { in: query, name: limit, required: false, schema: { type: integer, default: 20 } }
-      responses:
-        200:
-          content:
-            application/json:
-              example:
-                status: "success"
-                data: [{ projectId: 101, scanId: 501, avgComplexity: 12.5, technicalDebtScore: 85, severityDistribution: { high: 2, medium: 5, low: 10 }, generatedAt: "2026-04-10T12:00:00Z" }]
-                pagination: { page: 1, limit: 20, total: 1 }
+    /api/ai/statuses:
+        get:
+            tags: [AI]
+            parameters:
+                - {
+                      in: query,
+                      name: scanType,
+                      required: true,
+                      schema: { type: string, enum: [local, repo] },
+                  }
+                - {
+                      in: query,
+                      name: userId,
+                      required: false,
+                      schema: { type: string },
+                  }
+                - {
+                      in: query,
+                      name: projectId,
+                      required: false,
+                      schema: { type: string },
+                  }
+            responses:
+                200:
+                    content:
+                        application/json:
+                            example:
+                                status: "success"
+                                data:
+                                    - {
+                                          model: "openai/gpt-oss-20b",
+                                          isAvailable: true,
+                                          status: "Active",
+                                          reason: null,
+                                      }
+                                    - {
+                                          model: "qwen/qwen3-32b",
+                                          isAvailable: false,
+                                          status: "Down",
+                                          reason: "currently experiencing high traffic. Please wait a minute",
+                                      }
+                                    - {
+                                          model: "openai/gpt-oss-120b",
+                                          isAvailable: false,
+                                          status: "Out of Quota",
+                                          reason: null,
+                                      }
 
     /api/analytics:
         get:
@@ -1199,12 +1329,18 @@ paths:
                                 data:
                                     [
                                         {
+                                            id: 3001,
                                             projectId: 101,
                                             scanId: 501,
                                             avgComplexity: 12.5,
                                             technicalDebtScore: 85,
                                             severityDistribution:
-                                                { high: 2, medium: 5, low: 10 },
+                                                {
+                                                    LOW: 2,
+                                                    MEDIUM: 5,
+                                                    HIGH: 10,
+                                                    CRITICAL: 0,
+                                                },
                                             generatedAt: "2026-04-10T12:00:00Z",
                                         },
                                     ]
