@@ -51,7 +51,7 @@ export const upsertUser = async (githubUser: GitHubUserResponse, tokenData: GitH
   const expiresAt = tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null;
 
   return await prisma.user.upsert({
-    where: { githubId: githubUser.id.toString() },
+    where: { githubId: BigInt(githubUser.id) },
     update: {
       username: githubUser.login,
       avatarUrl: githubUser.avatar_url,
@@ -61,7 +61,7 @@ export const upsertUser = async (githubUser: GitHubUserResponse, tokenData: GitH
       githubTokenExpiresAt: expiresAt || undefined,
     },
     create: {
-      githubId: githubUser.id.toString(),
+      githubId: BigInt(githubUser.id),
       username: githubUser.login,
       avatarUrl: githubUser.avatar_url,
       email: githubUser.email,

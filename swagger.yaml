@@ -1,1361 +1,646 @@
 openapi: 3.0.0
 info:
-    title: CodePilot Backend API
-    version: 1.0.0
+  title: CodePilot Backend API
+  version: 1.0.0
 servers:
-    - url: http://localhost:5000
+  - url: http://localhost:5000
 
 tags:
-    - { name: Auth }
-    - { name: Users }
-    - { name: Projects }
-    - { name: Scans }
-    - { name: Issues }
-    - { name: AI }
-    - { name: Analytics }
-    - { name: Health }
+  - { name: Auth }
+  - { name: Users }
+  - { name: Projects }
+  - { name: Scans }
+  - { name: Issues }
+  - { name: AI }
+  - { name: Analytics }
+  - { name: Health }
 
 components:
-    securitySchemes:
-        BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  schemas:
+    ProjectProvider:
+      type: string
+      enum: [GITHUB]
+    MemberRole:
+      type: string
+      enum: [ADMIN, MEMBER]
+    DiscoverStatus:
+      type: string
+      enum: [IMPORT, JOIN, JOINED]
+    IssueSource:
+      type: string
+      enum: [AI, ANALYZER]
 
 security:
-    - BearerAuth: []
+  - BearerAuth: []
 
 paths:
-    /api/auth/github-url:
-        get:
-            tags: [Auth]
-            security: []
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        {
-                                            url: "https://github.com/login/oauth/authorize?client_id=sample-id&state=random-state-value",
-                                        },
-                                }
+  /api/auth/github-url:
+    get:
+      tags: [Auth]
+      security: []
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { url: "https://github.com/login/oauth/authorize?client_id=sample-id&state=random-state-value" } }
 
-    /api/auth/web/login:
-        post:
-            tags: [Auth]
-            security: []
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                required: [code, state],
-                                properties:
-                                    {
-                                        code: { type: string },
-                                        state: { type: string },
-                                    },
-                            }
-            responses:
-                200:
-                    headers:
-                        Set-Cookie:
-                            {
-                                schema:
-                                    {
-                                        type: string,
-                                        example: "refreshToken=abcde12345; Path=/; HttpOnly; Secure; SameSite=None",
-                                    },
-                            }
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        {
-                                            accessToken: "access-token-sample",
-                                            user:
-                                                {
-                                                    id: 1,
-                                                    githubId: 10001,
-                                                    username: "sample-user",
-                                                    avatarUrl: "https://avatars.githubusercontent.com/u/1",
-                                                },
-                                        },
-                                }
+  /api/auth/web/login:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [code, state], properties: { code: { type: string }, state: { type: string } } }
+      responses:
+        200:
+          headers:
+            Set-Cookie: { schema: { type: string, example: "refreshToken=abcde12345; Path=/; HttpOnly; Secure; SameSite=None" } }
+          content:
+            application/json:
+              example: { status: "success", data: { accessToken: "access-token-sample", user: { id: 1, githubId: "10001", username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
 
-    /api/auth/web/refresh:
-        post:
-            tags: [Auth]
-            security: []
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data: { accessToken: "new-jwt-token" },
-                                }
+  /api/auth/web/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { accessToken: "new-jwt-token" } }
 
-    /api/auth/web/logout:
-        post:
-            tags: [Auth]
-            security: []
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "Logged out successfully",
-                                }
+  /api/auth/web/logout:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Logged out successfully" }
 
-    /api/auth/extension/login:
-        post:
-            tags: [Auth]
-            security: []
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                required: [githubAccessToken],
-                                properties:
-                                    { githubAccessToken: { type: string } },
-                            }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        {
-                                            accessToken: "access-token-sample",
-                                            refreshToken: "refresh-token-sample",
-                                            user:
-                                                {
-                                                    id: 1,
-                                                    githubId: 10001,
-                                                    username: "sample-user",
-                                                    avatarUrl: "https://avatars.githubusercontent.com/u/1",
-                                                },
-                                        },
-                                }
+  /api/auth/extension/login:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [githubAccessToken], properties: { githubAccessToken: { type: string } } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { accessToken: "access-token-sample", refreshToken: "refresh-token-sample", user: { id: 1, githubId: "10001", username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" } } }
 
-    /api/auth/extension/refresh:
-        post:
-            tags: [Auth]
-            security: []
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                required: [refreshToken],
-                                properties: { refreshToken: { type: string } },
-                            }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        {
-                                            accessToken: "new-jwt-token",
-                                            refreshToken: "new-refresh-token",
-                                        },
-                                }
+  /api/auth/extension/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [refreshToken], properties: { refreshToken: { type: string } } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { accessToken: "new-jwt-token", refreshToken: "new-refresh-token" } }
 
-    /api/auth/extension/logout:
-        post:
-            tags: [Auth]
-            security: []
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                required: [refreshToken],
-                                properties: { refreshToken: { type: string } },
-                            }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "Logged out successfully",
-                                }
+  /api/auth/extension/logout:
+    post:
+      tags: [Auth]
+      security: []
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [refreshToken], properties: { refreshToken: { type: string } } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Logged out successfully" }
 
-    /api/users/me:
-        get:
-            tags: [Users]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 1,
-                                        githubId: 10001,
-                                        username: "sample-user",
-                                        email: "user@sample.com",
-                                        avatarUrl: "https://avatars.githubusercontent.com/u/1",
-                                        createdAt: "2026-05-01T12:00:00.000Z",
-                                    }
-        delete:
-            tags: [Users]
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "User account deleted successfully",
-                                }
+  /api/users/me:
+    get:
+      tags: [Users]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 1, githubId: "10001", username: "sample-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
+    delete:
+      tags: [Users]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "User account deleted successfully" }
 
-    /api/users/me/sync:
-        post:
-            tags: [Users]
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                message: "Profile synced with GitHub successfully"
-                                data:
-                                    {
-                                        id: 1,
-                                        githubId: 10001,
-                                        username: "synced-user",
-                                        email: "user@sample.com",
-                                        avatarUrl: "https://avatars.githubusercontent.com/u/1",
-                                        createdAt: "2026-05-01T12:00:00.000Z",
-                                    }
+  /api/users/me/sync:
+    post:
+      tags: [Users]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                message: "Profile synced with GitHub successfully"
+                data: { id: 1, githubId: "10001", username: "synced-user", email: "user@sample.com", avatarUrl: "https://avatars.githubusercontent.com/u/1", createdAt: "2026-05-01T12:00:00.000Z" }
 
-    /api/projects:
-        get:
-            tags: [Projects]
-            parameters:
-                - {
-                      in: query,
-                      name: page,
-                      required: false,
-                      schema: { type: integer, default: 1 },
-                  }
-                - {
-                      in: query,
-                      name: limit,
-                      required: false,
-                      schema: { type: integer, default: 30, maximum: 50 },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    [
-                                        {
-                                            id: 101,
-                                            name: "sample-project",
-                                            repoUrl: "https://github.com/org/sample-project",
-                                            provider: "GITHUB",
-                                            githubRepoId: "1296269",
-                                            owner: "org",
-                                            repoName: "sample-project",
-                                            installationId: 12345678,
-                                            lastScanDate: null,
-                                            createdAt: "2026-05-01T12:00:00.000Z",
-                                            _count: { members: 3, scans: 5 },
-                                        },
-                                    ]
-                                pagination: { page: 1, limit: 30, total: 1 }
-        post:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                required: [owner, repoName],
-                                properties:
-                                    {
-                                        owner: { type: string },
-                                        repoName: { type: string },
-                                    },
-                            }
-            responses:
-                201:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 102,
-                                        name: "Hello-World",
-                                        repoUrl: "https://github.com/octocat/Hello-World",
-                                        provider: "GITHUB",
-                                        githubRepoId: "1296269",
-                                        owner: "octocat",
-                                        repoName: "Hello-World",
-                                        installationId: 87654321,
-                                        lastScanDate: null,
-                                        createdAt: "2026-05-10T12:00:00.000Z",
-                                    }
+  /api/projects:
+    get:
+      tags: [Projects]
+      parameters:
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 30, maximum: 50 } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: "12345678", lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }]
+                pagination: { page: 1, limit: 30, total: 1 }
+    post:
+      tags: [Projects]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [owner, repoName], properties: { owner: { type: string }, repoName: { type: string } } }
+      responses:
+        201:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 102, name: "Hello-World", repoUrl: "https://github.com/octocat/Hello-World", provider: "GITHUB", githubRepoId: "1296269", owner: "octocat", repoName: "Hello-World", installationId: "87654321", lastScanDate: null, createdAt: "2026-05-10T12:00:00.000Z" }
 
-    /api/projects/discover:
-        get:
-            tags: [Projects]
-            parameters:
-                - {
-                      in: query,
-                      name: page,
-                      required: false,
-                      schema: { type: integer, default: 1 },
-                  }
-                - {
-                      in: query,
-                      name: limit,
-                      required: false,
-                      schema: { type: integer, default: 30, maximum: 50 },
-                  }
-                - {
-                      in: query,
-                      name: search,
-                      required: false,
-                      schema: { type: string },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    [
-                                        {
-                                            githubId: 1296269,
-                                            name: "Hello-World",
-                                            owner: "octocat",
-                                            fullName: "octocat/Hello-World",
-                                            url: "https://github.com/octocat/Hello-World",
-                                            description: "My first repository on GitHub!",
-                                            private: false,
-                                            isAdmin: true,
-                                            status: "IMPORT",
-                                            projectId: null,
-                                        },
-                                    ]
-                                pagination: { page: 1, limit: 30, total: null }
+  /api/projects/discover:
+    get:
+      tags: [Projects]
+      parameters:
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 30, maximum: 50 } }
+        - { in: query, name: search, required: false, schema: { type: string } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ githubId: "1296269", name: "Hello-World", owner: "octocat", fullName: "octocat/Hello-World", url: "https://github.com/octocat/Hello-World", description: "My first repository on GitHub!", private: false, isAdmin: true, status: "IMPORT", projectId: null }]
+                pagination: { page: 1, limit: 30, total: null }
 
-    /api/projects/{projectId}/members:
-        get:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: projectId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    [
-                                        {
-                                            userId: 1,
-                                            username: "alice",
-                                            avatarUrl: "https://avatars.githubusercontent.com/u/1",
-                                            role: "ADMIN",
-                                        },
-                                    ]
+  /api/projects/{projectId}/members:
+    get:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ userId: 1, username: "alice", avatarUrl: "https://avatars.githubusercontent.com/u/1", role: "ADMIN" }]
 
-    /api/projects/{projectId}:
-        get:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: projectId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 101,
-                                        name: "sample-project",
-                                        repoUrl: "https://github.com/org/sample-project",
-                                        provider: "GITHUB",
-                                        githubRepoId: "1296269",
-                                        owner: "org",
-                                        repoName: "sample-project",
-                                        installationId: 12345678,
-                                        lastScanDate: null,
-                                        createdAt: "2026-05-01T12:00:00.000Z",
-                                        _count: { members: 3, scans: 5 },
-                                    }
-        patch:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: projectId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                required: [name],
-                                properties: { name: { type: string } },
-                            }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 101,
-                                        name: "updated-name",
-                                        repoUrl: "https://github.com/org/sample-project",
-                                        provider: "GITHUB",
-                                        githubRepoId: "1296269",
-                                        owner: "org",
-                                        repoName: "sample-project",
-                                        installationId: 12345678,
-                                        lastScanDate: null,
-                                        createdAt: "2026-05-01T12:00:00.000Z",
-                                    }
-        delete:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: projectId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "Project deleted successfully",
-                                }
+  /api/projects/{projectId}/branches:
+    get:
+      tags: [Projects]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ name: "main", isDefault: true }, { name: "dev", isDefault: false }]
 
-    /api/projects/{projectId}/sync:
-        post:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: projectId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    role: "ADMIN"
-                                    project:
-                                        {
-                                            name: "updated-repo-name",
-                                            owner: "new-owner",
-                                            repoUrl: "https://github.com/new-owner/updated-repo-name",
-                                        }
+  /api/projects/{projectId}:
+    get:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 101, name: "sample-project", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: "12345678", lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z", _count: { members: 3, scans: 5 } }
+    patch:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 101, name: "updated-name", repoUrl: "https://github.com/org/sample-project", provider: "GITHUB", githubRepoId: "1296269", owner: "org", repoName: "sample-project", installationId: "12345678", lastScanDate: null, createdAt: "2026-05-01T12:00:00.000Z" }
+    delete:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Project deleted successfully" }
 
-    /api/projects/{projectId}/leave:
-        delete:
-            tags: [Projects]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: projectId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "Successfully left the project",
-                                }
+  /api/projects/{projectId}/sync:
+    post:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  role: "ADMIN"
+                  project: { name: "updated-repo-name", owner: "new-owner", repoUrl: "https://github.com/new-owner/updated-repo-name" }
 
-    /api/scans:
-        get:
-            tags: [Scans]
-            parameters:
-                - {
-                      in: query,
-                      name: projectId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: status,
-                      required: false,
-                      schema:
-                          {
-                              type: string,
-                              enum: [IN_PROGRESS, COMPLETED, FAILED],
-                          },
-                  }
-                - {
-                      in: query,
-                      name: page,
-                      required: false,
-                      schema: { type: integer, default: 1 },
-                  }
-                - {
-                      in: query,
-                      name: limit,
-                      required: false,
-                      schema: { type: integer, default: 20 },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    [
-                                        {
-                                            id: 501,
-                                            projectId: 101,
-                                            initiatorId: 1,
-                                            status: "COMPLETED",
-                                            branchName: "main",
-                                            commitSha: "abc123def456",
-                                            modelUsed: "qwen/qwen3-32b",
-                                            tokensUsed: 3200,
-                                            durationMs: 4500,
-                                            scanDate: "2026-04-10T12:00:00Z",
-                                        },
-                                    ]
-                                pagination: { page: 1, limit: 20, total: 1 }
-        post:
-            tags: [Scans]
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            type: object
-                            required: [projectId, branchName]
-                            properties:
-                                projectId: { type: integer }
-                                branchName: { type: string }
-                                preferredModel:
-                                    type: string
-                                    enum:
-                                        - "meta-llama/llama-4-scout-17b-16e-instruct"
-                                        - "groq/compound"
-                                        - "qwen/qwen3-32b"
-                                        - "openai/gpt-oss-120b"
-            responses:
-                202:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        {
-                                            id: 501,
-                                            projectId: 101,
-                                            initiatorId: 1,
-                                            status: "IN_PROGRESS",
-                                            branchName: "main",
-                                            commitSha: null,
-                                            modelUsed: null,
-                                            tokensUsed: null,
-                                            durationMs: null,
-                                            scanDate: "2026-04-10T12:00:00Z",
-                                        },
-                                }
+  /api/projects/{projectId}/leave:
+    delete:
+      tags: [Projects]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: integer } }, { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Successfully left the project" }
 
-    /api/scans/local-analysis:
-        post:
-            tags: [Scans]
-            parameters:
-                [
-                    {
-                        in: header,
-                        name: X-Requested-With,
-                        required: true,
-                        schema: { type: string, default: XMLHttpRequest },
-                    },
-                ]
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            type: object
-                            required: [files]
-                            properties:
-                                projectId: { type: integer }
-                                files:
-                                    type: array
-                                    items:
-                                        type: object
-                                        required: [path, content]
-                                        properties:
-                                            path: { type: string }
-                                            content: { type: string }
-                                            selectedLines:
-                                                type: array
-                                                items:
-                                                    type: object
-                                                    required: [start, end]
-                                                    properties:
-                                                        start: { type: integer }
-                                                        end: { type: integer }
-                                preferredModel:
-                                    type: string
-                                    enum:
-                                        - "llama-3.1-8b-instant"
-                                        - "openai/gpt-oss-20b"
-                                        - "qwen/qwen3-32b"
-                                        - "qwen/qwen3.6-27b"
-            responses:
-                201:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    issues:
-                                        - filePath: "src/auth.ts"
-                                          lineNumber: 10
-                                          severity: "HIGH"
-                                          category: "SECURITY"
-                                          summary: "SQL Injection found in login endpoint"
-                                          codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)"
-                                          suggestions:
-                                              - summary: "Apply Parameterized Queries"
-                                                explanation: "Sample detailed explanation of the AI suggestion."
-                                                diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);"
-                                    modelUsed: "openai/gpt-oss-20b"
-                                    tokensUsed: 1250
-                                    durationMs: 2320
+  /api/scans:
+    get:
+      tags: [Scans]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+        - { in: query, name: status, required: false, schema: { type: string, enum: [IN_PROGRESS, COMPLETED, FAILED] } }
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", failureReason: null, branchName: "main", commitSha: "abc123def456", modelUsed: "qwen/qwen3-32b", tokensUsed: 3200, durationMs: 4500, _count: { issues: 12 }, scanDate: "2026-04-10T12:00:00Z" }]
+                pagination: { page: 1, limit: 20, total: 1 }
+    post:
+      tags: [Scans]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId, branchName]
+              properties:
+                projectId: { type: integer }
+                branchName: { type: string }
+                preferredModel:
+                  type: string
+                  enum:
+                    - "meta-llama/llama-4-scout-17b-16e-instruct"
+                    - "groq/compound"
+                    - "qwen/qwen3-32b"
+                    - "openai/gpt-oss-120b"
+      responses:
+        202:
+          content:
+            application/json:
+              example: { status: "success", data: { id: 501, projectId: 101, initiatorId: 1, status: "IN_PROGRESS", failureReason: null, branchName: "main", commitSha: null, modelUsed: null, tokensUsed: null, durationMs: null, scanDate: "2026-04-10T12:00:00Z" } }
 
-    /api/scans/{scanId}/report:
-        get:
-            tags: [Scans]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: scanId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/pdf:
-                            schema: { type: string, format: binary }
+  /api/scans/local-analysis:
+    post:
+      tags: [Scans]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                projectId: { type: integer }
+                files:
+                  type: array
+                  items:
+                    type: object
+                    required: [path, content]
+                    properties:
+                      path: { type: string }
+                      content: { type: string }
+                      selectedLines:
+                        type: array
+                        items:
+                          type: object
+                          required: [start, end]
+                          properties:
+                            start: { type: integer }
+                            end: { type: integer }
+                preferredModel:
+                  type: string
+                  enum:
+                    - "llama-3.1-8b-instant"
+                    - "openai/gpt-oss-20b"
+                    - "qwen/qwen3-32b"
+                    - "qwen/qwen3.6-27b"
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  issues:
+                    - filePath: "src/auth.ts"
+                      lineNumber: 10
+                      severity: "HIGH"
+                      category: "SECURITY"
+                      summary: "SQL Injection found in login endpoint"
+                      codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)"
+                      suggestions:
+                        - summary: "Apply Parameterized Queries"
+                          explanation: "Sample detailed explanation of the AI suggestion."
+                          diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);"
+                  modelUsed: "openai/gpt-oss-20b"
+                  tokensUsed: 1250
+                  durationMs: 2320
 
-    /api/scans/{scanId}:
-        get:
-            tags: [Scans]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: scanId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 501,
-                                        projectId: 101,
-                                        initiatorId: 1,
-                                        status: "COMPLETED",
-                                        branchName: "main",
-                                        commitSha: "abc123def456",
-                                        modelUsed: "qwen/qwen3-32b",
-                                        tokensUsed: 3200,
-                                        durationMs: 4500,
-                                        scanDate: "2026-04-10T12:00:00Z",
-                                    }
-        delete:
-            tags: [Scans]
-            parameters:
-                - {
-                      in: path,
-                      name: scanId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: header,
-                      name: X-Requested-With,
-                      required: true,
-                      schema: { type: string, default: XMLHttpRequest },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "Scan deleted successfully",
-                                }
+  /api/scans/{scanId}/report:
+    get:
+      tags: [Scans]
+      parameters: [{ in: path, name: scanId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
 
-    /api/issues:
-        get:
-            tags: [Issues]
-            parameters:
-                - {
-                      in: query,
-                      name: projectId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: scanId,
-                      required: false,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: status,
-                      required: false,
-                      schema: { type: string, enum: [OPEN, FIXED, IGNORED] },
-                  }
-                - {
-                      in: query,
-                      name: severity,
-                      required: false,
-                      schema:
-                          { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] },
-                  }
-                - {
-                      in: query,
-                      name: category,
-                      required: false,
-                      schema:
-                          {
-                              type: string,
-                              enum:
-                                  [
-                                      CODE_SMELL,
-                                      DEAD_CODE,
-                                      DUPLICATE,
-                                      COMPLEXITY,
-                                      SRP_VIOLATION,
-                                      SECURITY,
-                                      PERFORMANCE,
-                                      FUNCTIONALITY,
-                                      OTHER,
-                                  ],
-                          },
-                  }
-                - {
-                      in: query,
-                      name: source,
-                      required: false,
-                      schema: { type: string, enum: [AI, ANALYZER] },
-                  }
-                - {
-                      in: query,
-                      name: page,
-                      required: false,
-                      schema: { type: integer, default: 1 },
-                  }
-                - {
-                      in: query,
-                      name: limit,
-                      required: false,
-                      schema: { type: integer, default: 20 },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    [
-                                        {
-                                            id: 901,
-                                            projectId: 101,
-                                            scanId: 501,
-                                            severity: "HIGH",
-                                            category: "SECURITY",
-                                            summary: "SQL Injection found in login endpoint",
-                                            source: "AI",
-                                            status: "OPEN",
-                                            detectedAt: "2026-04-10T12:00:00Z",
-                                            suggestions:
-                                                [
-                                                    {
-                                                        id: 2001,
-                                                        summary: "Apply Parameterized Queries",
-                                                        status: "PENDING",
-                                                    },
-                                                ],
-                                        },
-                                    ]
-                                pagination: { page: 1, limit: 20, total: 1 }
+  /api/scans/{scanId}:
+    get:
+      tags: [Scans]
+      parameters: [{ in: path, name: scanId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 501, projectId: 101, initiatorId: 1, status: "COMPLETED", failureReason: null, branchName: "main", commitSha: "abc123def456", modelUsed: "qwen/qwen3-32b", tokensUsed: 3200, durationMs: 4500, _count: { issues: 12 }, scanDate: "2026-04-10T12:00:00Z" }
+    delete:
+      tags: [Scans]
+      parameters: 
+        - { in: path, name: scanId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "Scan deleted successfully" }
 
-    /api/issues/{issueId}:
-        get:
-            tags: [Issues]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: issueId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 901,
-                                        projectId: 101,
-                                        scanId: 501,
-                                        severity: "HIGH",
-                                        category: "SECURITY",
-                                        summary: "SQL Injection found in login endpoint",
-                                        explanation: "Sample detailed explanation of the detected issue.",
-                                        filePath: "src/auth.ts",
-                                        codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)",
-                                        lineNumber: 42,
-                                        source: "AI",
-                                        status: "OPEN",
-                                        detectedAt: "2026-04-10T12:00:00Z",
-                                        suggestions:
-                                            [
-                                                {
-                                                    id: 2001,
-                                                    summary: "Apply Parameterized Queries",
-                                                    explanation: "Use parameterized queries to prevent SQL injection attacks.",
-                                                    diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);",
-                                                    status: "PENDING",
-                                                    generatedAt: "2026-04-10T12:00:00Z",
-                                                },
-                                            ],
-                                    }
-        patch:
-            tags: [Issues]
-            parameters:
-                - {
-                      in: path,
-                      name: issueId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: header,
-                      name: X-Requested-With,
-                      required: true,
-                      schema: { type: string, default: XMLHttpRequest },
-                  }
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            {
-                                type: object,
-                                properties:
-                                    {
-                                        status:
-                                            {
-                                                type: string,
-                                                enum: [OPEN, FIXED, IGNORED],
-                                            },
-                                    },
-                            }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 901,
-                                        projectId: 101,
-                                        scanId: 501,
-                                        severity: "HIGH",
-                                        category: "SECURITY",
-                                        summary: "SQL Injection found in login endpoint",
-                                        explanation: "Sample detailed explanation of the detected issue.",
-                                        filePath: "src/auth.ts",
-                                        codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)",
-                                        lineNumber: 42,
-                                        source: "AI",
-                                        status: "FIXED",
-                                        detectedAt: "2026-04-10T12:00:00Z",
-                                        suggestions:
-                                            [
-                                                {
-                                                    id: 2001,
-                                                    summary: "Apply Parameterized Queries",
-                                                    explanation: "Use parameterized queries to prevent SQL injection attacks.",
-                                                    diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);",
-                                                    status: "APPLIED",
-                                                    generatedAt: "2026-04-10T12:00:00Z",
-                                                },
-                                            ],
-                                    }
+  /api/issues/bulk:
+    patch:
+      tags: [Issues]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issueIds, status]
+              properties:
+                issueIds: { type: array, items: { type: integer } }
+                status: { type: string, enum: [OPEN, FIXED, IGNORED] }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { updatedCount: 5, failedIds: [] } }
 
-    /api/ai/suggestions:
-        get:
-            tags: [AI]
-            parameters:
-                - {
-                      in: query,
-                      name: projectId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: scanId,
-                      required: false,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: issueId,
-                      required: false,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: status,
-                      required: false,
-                      schema:
-                          { type: string, enum: [PENDING, APPLIED, DISMISSED] },
-                  }
-                - {
-                      in: query,
-                      name: page,
-                      required: false,
-                      schema: { type: integer, default: 1 },
-                  }
-                - {
-                      in: query,
-                      name: limit,
-                      required: false,
-                      schema: { type: integer, default: 20 },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        [
-                                            {
-                                                id: 2001,
-                                                projectId: 101,
-                                                scanId: 501,
-                                                issueId: 901,
-                                                status: "PENDING",
-                                                summary: "Apply Parameterized Queries",
-                                                generatedAt: "2026-04-10T12:00:00Z",
-                                            },
-                                        ],
-                                    pagination:
-                                        { page: 1, limit: 20, total: 1 },
-                                }
+  /api/issues:
+    get:
+      tags: [Issues]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+        - { in: query, name: scanId, required: false, schema: { type: integer } }
+        - { in: query, name: status, required: false, schema: { type: string, enum: [OPEN, FIXED, IGNORED] } }
+        - { in: query, name: severity, required: false, schema: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] } }
+        - { in: query, name: category, required: false, schema: { type: string, enum: [CODE_SMELL, DEAD_CODE, DUPLICATE, COMPLEXITY, SRP_VIOLATION, SECURITY, PERFORMANCE, FUNCTIONALITY, OTHER] } }
+        - { in: query, name: search, required: false, schema: { type: string } }
+        - { in: query, name: sortBy, required: false, schema: { type: string, enum: [detectedAt, severity, category] } }
+        - { in: query, name: sortDirection, required: false, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: 
+                status: "success"
+                data: [{ id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", status: "OPEN", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z", suggestions: [{ id: 2001, summary: "Apply Parameterized Queries", status: "PENDING" }] }]
+                pagination: { page: 1, limit: 20, total: 1 }
 
-    /api/ai/suggestions/{suggestionId}:
-        get:
-            tags: [AI]
-            parameters:
-                [
-                    {
-                        in: path,
-                        name: suggestionId,
-                        required: true,
-                        schema: { type: integer },
-                    },
-                ]
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    {
-                                        id: 2001,
-                                        projectId: 101,
-                                        scanId: 501,
-                                        issueId: 901,
-                                        status: "PENDING",
-                                        summary: "Apply Parameterized Queries",
-                                        explanation: "Sample detailed explanation of the AI suggestion.",
-                                        diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);",
-                                        generatedAt: "2026-04-10T12:00:00Z",
-                                    }
+  /api/issues/{issueId}:
+    get:
+      tags: [Issues]
+      parameters: [{ in: path, name: issueId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "OPEN", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z", suggestions: [{ id: 2001, summary: "Apply Parameterized Queries", explanation: "Use parameterized queries to prevent SQL injection attacks.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", status: "PENDING", generatedAt: "2026-04-10T12:00:00Z" }] }
+    patch:
+      tags: [Issues]
+      parameters: 
+        - { in: path, name: issueId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { status: { type: string, enum: [OPEN, FIXED, IGNORED] } } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: 
+                status: "success"
+                data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "FIXED", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z" }
 
-    /api/ai/suggestions/{suggestionId}/apply:
-        post:
-            tags: [AI]
-            parameters:
-                - {
-                      in: path,
-                      name: suggestionId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: header,
-                      name: X-Requested-With,
-                      required: true,
-                      schema: { type: string, default: XMLHttpRequest },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data:
-                                        {
-                                            id: 2001,
-                                            status: "APPLIED",
-                                            branchName: "codepilot/fix-2001",
-                                            prUrl: "https://github.com/org/sample-project/pull/42",
-                                        },
-                                }
+  /api/ai/suggestions/bulk-apply:
+    post:
+      tags: [AI]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suggestionIds]
+              properties:
+                suggestionIds: { type: array, items: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { branchName: "codepilot/batch-fixes-501", prUrl: "https://github.com/org/sample-project/pull/43", appliedCount: 5, failedIds: [] } }
 
-    /api/ai/suggestions/{suggestionId}/dismiss:
-        post:
-            tags: [AI]
-            parameters:
-                - {
-                      in: path,
-                      name: suggestionId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: header,
-                      name: X-Requested-With,
-                      required: true,
-                      schema: { type: string, default: XMLHttpRequest },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    data: { id: 2001, status: "DISMISSED" },
-                                }
+  /api/ai/suggestions/bulk-dismiss:
+    post:
+      tags: [AI]
+      parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suggestionIds]
+              properties:
+                suggestionIds: { type: array, items: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { dismissedCount: 5, failedIds: [] } }
 
-    /api/ai/statuses:
-        get:
-            tags: [AI]
-            parameters:
-                - {
-                      in: query,
-                      name: scanType,
-                      required: true,
-                      schema: { type: string, enum: [local, repo] },
-                  }
-                - {
-                      in: query,
-                      name: userId,
-                      required: false,
-                      schema: { type: string },
-                  }
-                - {
-                      in: query,
-                      name: projectId,
-                      required: false,
-                      schema: { type: string },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    - {
-                                          model: "openai/gpt-oss-20b",
-                                          isAvailable: true,
-                                          status: "Active",
-                                          reason: null,
-                                      }
-                                    - {
-                                          model: "qwen/qwen3-32b",
-                                          isAvailable: false,
-                                          status: "Down",
-                                          reason: "currently experiencing high traffic. Please wait a minute",
-                                      }
-                                    - {
-                                          model: "openai/gpt-oss-120b",
-                                          isAvailable: false,
-                                          status: "Out of Quota",
-                                          reason: null,
-                                      }
+  /api/ai/suggestions:
+    get:
+      tags: [AI]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+        - { in: query, name: scanId, required: false, schema: { type: integer } }
+        - { in: query, name: issueId, required: false, schema: { type: integer } }
+        - { in: query, name: status, required: false, schema: { type: string, enum: [PENDING, APPLIED, DISMISSED] } }
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: [{ id: 2001, projectId: 101, scanId: 501, issueId: 901, status: "PENDING", summary: "Apply Parameterized Queries", generatedAt: "2026-04-10T12:00:00Z" }], pagination: { page: 1, limit: 20, total: 1 } }
 
-    /api/analytics:
-        get:
-            tags: [Analytics]
-            parameters:
-                - {
-                      in: query,
-                      name: projectId,
-                      required: true,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: scanId,
-                      required: false,
-                      schema: { type: integer },
-                  }
-                - {
-                      in: query,
-                      name: page,
-                      required: false,
-                      schema: { type: integer, default: 1 },
-                  }
-                - {
-                      in: query,
-                      name: limit,
-                      required: false,
-                      schema: { type: integer, default: 20 },
-                  }
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                status: "success"
-                                data:
-                                    [
-                                        {
-                                            id: 3001,
-                                            projectId: 101,
-                                            scanId: 501,
-                                            avgComplexity: 12.5,
-                                            technicalDebtScore: 85,
-                                            severityDistribution:
-                                                {
-                                                    LOW: 2,
-                                                    MEDIUM: 5,
-                                                    HIGH: 10,
-                                                    CRITICAL: 0,
-                                                },
-                                            generatedAt: "2026-04-10T12:00:00Z",
-                                        },
-                                    ]
-                                pagination: { page: 1, limit: 20, total: 1 }
+  /api/ai/suggestions/{suggestionId}:
+    get:
+      tags: [AI]
+      parameters: [{ in: path, name: suggestionId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: { id: 2001, projectId: 101, scanId: 501, issueId: 901, status: "PENDING", summary: "Apply Parameterized Queries", explanation: "Sample detailed explanation of the AI suggestion.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", modelUsed: "openai/gpt-oss-20b", generatedAt: "2026-04-10T12:00:00Z" }
 
-    /api/health:
-        get:
-            tags: [Health]
-            security: []
-            responses:
-                200:
-                    content:
-                        application/json:
-                            example:
-                                {
-                                    status: "success",
-                                    message: "CodePilot Backend Engine is live!",
-                                }
+  /api/ai/suggestions/{suggestionId}/apply:
+    post:
+      tags: [AI]
+      parameters: 
+        - { in: path, name: suggestionId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { id: 2001, status: "APPLIED", branchName: "codepilot/fix-2001", prUrl: "https://github.com/org/sample-project/pull/42" } }
+
+  /api/ai/suggestions/{suggestionId}/dismiss:
+    post:
+      tags: [AI]
+      parameters: 
+        - { in: path, name: suggestionId, required: true, schema: { type: integer } }
+        - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", data: { id: 2001, status: "DISMISSED" } }
+
+  /api/ai/statuses:
+    get:
+      tags: [AI]
+      parameters:
+        - { in: query, name: scanType, required: true, schema: { type: string, enum: [local, repo] } }
+        - { in: query, name: projectId, required: false, schema: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  - { model: "openai/gpt-oss-20b", isAvailable: true, status: "Active", reason: null }
+                  - { model: "qwen/qwen3-32b", isAvailable: false, status: "Down", reason: "currently experiencing high traffic. Please wait a minute" }
+                  - { model: "openai/gpt-oss-120b", isAvailable: false, status: "Out of Quota", reason: null }
+
+  /api/analytics/summary:
+    get:
+      tags: [Analytics]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  totalScans: 12
+                  totalIssuesDetected: 47
+                  openIssues: 24
+                  latestDebtScore: 85
+                  categoryDistribution: { SECURITY: 5, CODE_SMELL: 12 }
+                  severityDistribution: { CRITICAL: 2, HIGH: 10, MEDIUM: 20, LOW: 15 }
+                  trend:
+                    - { scanId: 498, debtScore: 120, date: "2026-03-01T12:00:00Z" }
+                    - { scanId: 501, debtScore: 85, date: "2026-04-10T12:00:00Z" }
+
+  /api/analytics:
+    get:
+      tags: [Analytics]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+        - { in: query, name: scanId, required: false, schema: { type: integer } }
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data: [{ id: 3001, projectId: 101, scanId: 501, avgComplexity: 12.5, technicalDebtScore: 85, severityDistribution: { LOW: 2, MEDIUM: 5, HIGH: 10, CRITICAL: 0 }, generatedAt: "2026-04-10T12:00:00Z" }]
+                pagination: { page: 1, limit: 20, total: 1 }
+
+  /api/health:
+    get:
+      tags: [Health]
+      security: []
+      responses:
+        200:
+          content:
+            application/json:
+              example: { status: "success", message: "CodePilot Backend Engine is live!" }
