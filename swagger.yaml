@@ -368,7 +368,7 @@ paths:
                     - "qwen/qwen3-32b"
                     - "qwen/qwen3.6-27b"
       responses:
-        201:
+        200:
           content:
             application/json:
               example:
@@ -503,12 +503,11 @@ paths:
               required: [suggestionIds]
               properties:
                 suggestionIds: { type: array, items: { type: integer } }
-                branchName: { type: string }
       responses:
         200:
           content:
             application/json:
-              example: { status: "success", data: { branchName: "codepilot/batch-fixes", appliedCount: 5, failedIds: [] } }
+              example: { status: "success", data: { branchName: "codepilot/batch-fixes-501", prUrl: "https://github.com/org/sample-project/pull/43", appliedCount: 5, failedIds: [] } }
 
   /api/ai/suggestions/bulk-dismiss:
     post:
@@ -566,7 +565,7 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { id: 2001, status: "APPLIED", branchName: "codepilot/fix-2001" } }
+              example: { status: "success", data: { id: 2001, status: "APPLIED", branchName: "codepilot/fix-2001", prUrl: "https://github.com/org/sample-project/pull/42" } }
 
   /api/ai/suggestions/{suggestionId}/dismiss:
     post:
@@ -585,8 +584,7 @@ paths:
       tags: [AI]
       parameters:
         - { in: query, name: scanType, required: true, schema: { type: string, enum: [local, repo] } }
-        - { in: query, name: userId, required: false, schema: { type: string } }
-        - { in: query, name: projectId, required: false, schema: { type: string } }
+        - { in: query, name: projectId, required: false, schema: { type: integer } }
       responses:
         200:
           content:
