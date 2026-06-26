@@ -416,3 +416,50 @@ export const syncProject = async (userId: number, projectId: number) => {
         throw new ApiError('Failed to sync project with GitHub', 500);
     }
 };
+
+export const getProjectBranches = async (userId: number, projectId: number) => {
+    const project = await prisma.project.findFirst({
+        where: {
+            id: projectId,
+            members: {
+                some: { userId }
+            }
+        },
+        select: {
+            owner: true,
+            repoName: true,
+            installationId: true,
+        }
+    });
+
+    if (!project) throw new ApiError('Project not found or access denied', 404);
+    if (!project.installationId) throw new ApiError('GitHub App is not installed on this repository', 400);
+
+    try {
+        const appOctokit = await getInstallationOctokit(project.installationId);
+
+        const [{ data: repo }, { data: branches }] = await Promise.all([
+            appOctokit.request('GET /repos/{owner}/{repo}', {
+                owner: project.owner,
+                repo: project.repoName,
+                request: { signal: AbortSignal.timeout(10000) },
+            }),
+            appOctokit.request('GET /repos/{owner}/{repo}/branches', {
+                owner: project.owner,
+                repo: project.repoName,
+                per_page: 100,
+                request: { signal: AbortSignal.timeout(10000) },
+            }),
+        ]);
+
+        const defaultBranch = repo.default_branch;
+
+        return branches.map((b: any) => ({
+            name: b.name,
+            isDefault: b.name === defaultBranch,
+        }));
+    } catch (error) {
+        if (error instanceof ApiError) throw error;
+        throw new ApiError('Failed to fetch project branches from GitHub', 500);
+    }
+};
