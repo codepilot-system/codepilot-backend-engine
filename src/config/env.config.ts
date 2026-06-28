@@ -5,6 +5,7 @@ dotenv.config();
 const requiredEnvs = [
   'DATABASE_URL',
   'GITHUB_APP_ID',
+  'GITHUB_APP_BOT_LOGIN',
   'GITHUB_CLIENT_ID',
   'GITHUB_CLIENT_SECRET',
   'GITHUB_REDIRECT_URI',
@@ -30,6 +31,7 @@ export const ENV = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
   GITHUB_APP_ID: process.env.GITHUB_APP_ID!,
+  GITHUB_APP_BOT_LOGIN: process.env.GITHUB_APP_BOT_LOGIN!,
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID!,
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET!,
   GITHUB_REDIRECT_URI: process.env.GITHUB_REDIRECT_URI!,

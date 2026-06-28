@@ -191,11 +191,8 @@ export const analyzeLocalCode = async (
         scanFiles.map((f) => ({ filePath: f.filePath, content: f.content })),
         'local'
     );
-    const findingsSummary = analyzerOutput.findings.length > 0
-        ? buildFindingsSummaryText(analyzerOutput)
-        : undefined;
 
-    const aiResult = await analyzeLocalScan(scanFiles, String(userId), preferredModel, projectBrief, findingsSummary);
+    const aiResult = await analyzeLocalScan(scanFiles, String(userId), preferredModel, projectBrief);
 
 
     const issues = aiResult.issues.map((issue) => ({

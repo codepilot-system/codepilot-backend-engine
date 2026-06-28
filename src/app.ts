@@ -11,6 +11,7 @@ import usersRoutes from './services/users/users.routes';
 import projectsRoutes from './services/projects/projects.routes';
 import scansRoutes from './services/scans/scans.routes';
 import issuesRoutes from './services/issues/issues.routes';
+import suggestionsRoutes from './services/suggestions/suggestions.routes';
 import aiRoutes from './services/ai/ai.routes';
 import analyticsRoutes from './services/analytics/analytics.routes';
 import { ENV } from './config/env.config';
@@ -52,6 +53,7 @@ app.use('/api/projects', projectsRoutes);
 app.use('/api/scans', scansRoutes);
 app.use('/api/issues', issuesRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/suggestions', suggestionsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 app.use(errorHandler);

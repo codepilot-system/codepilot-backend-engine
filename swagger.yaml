@@ -11,6 +11,7 @@ tags:
   - { name: Projects }
   - { name: Scans }
   - { name: Issues }
+  - { name: Suggestions }
   - { name: AI }
   - { name: Analytics }
   - { name: Health }
@@ -491,9 +492,9 @@ paths:
                 status: "success"
                 data: { id: 901, projectId: 101, scanId: 501, severity: "HIGH", category: "SECURITY", summary: "SQL Injection found in login endpoint", explanation: "Sample detailed explanation of the detected issue.", filePath: "src/auth.ts", codeSnippet: "db.query('SELECT * FROM users WHERE id = ' + id)", lineNumber: 42, status: "FIXED", source: "ANALYZER", detectedAt: "2026-04-10T12:00:00Z" }
 
-  /api/ai/suggestions/bulk-apply:
+  /api/suggestions/bulk-apply:
     post:
-      tags: [AI]
+      tags: [Suggestions]
       parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
@@ -507,11 +508,11 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { branchName: "codepilot/batch-fixes-501", prUrl: "https://github.com/org/sample-project/pull/43", appliedCount: 5, failedIds: [] } }
+              example: { status: "success", data: { branchName: "codepilot/batch-fixes-501", prUrl: "https://github.com/org/sample-project/pull/43", appliedCount: 5, failures: {} } }
 
-  /api/ai/suggestions/bulk-dismiss:
+  /api/suggestions/bulk-dismiss:
     post:
-      tags: [AI]
+      tags: [Suggestions]
       parameters: [{ in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }]
       requestBody:
         content:
@@ -525,11 +526,11 @@ paths:
         200:
           content:
             application/json:
-              example: { status: "success", data: { dismissedCount: 5, failedIds: [] } }
+              example: { status: "success", data: { dismissedCount: 5, failures: {} } }
 
-  /api/ai/suggestions:
+  /api/suggestions:
     get:
-      tags: [AI]
+      tags: [Suggestions]
       parameters:
         - { in: query, name: projectId, required: true, schema: { type: integer } }
         - { in: query, name: scanId, required: false, schema: { type: integer } }
@@ -543,9 +544,9 @@ paths:
             application/json:
               example: { status: "success", data: [{ id: 2001, projectId: 101, scanId: 501, issueId: 901, status: "PENDING", summary: "Apply Parameterized Queries", generatedAt: "2026-04-10T12:00:00Z" }], pagination: { page: 1, limit: 20, total: 1 } }
 
-  /api/ai/suggestions/{suggestionId}:
+  /api/suggestions/{suggestionId}:
     get:
-      tags: [AI]
+      tags: [Suggestions]
       parameters: [{ in: path, name: suggestionId, required: true, schema: { type: integer } }]
       responses:
         200:
@@ -555,9 +556,9 @@ paths:
                 status: "success"
                 data: { id: 2001, projectId: 101, scanId: 501, issueId: 901, status: "PENDING", summary: "Apply Parameterized Queries", explanation: "Sample detailed explanation of the AI suggestion.", diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);", modelUsed: "openai/gpt-oss-20b", generatedAt: "2026-04-10T12:00:00Z" }
 
-  /api/ai/suggestions/{suggestionId}/apply:
+  /api/suggestions/{suggestionId}/apply:
     post:
-      tags: [AI]
+      tags: [Suggestions]
       parameters: 
         - { in: path, name: suggestionId, required: true, schema: { type: integer } }
         - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
@@ -567,9 +568,9 @@ paths:
             application/json:
               example: { status: "success", data: { id: 2001, status: "APPLIED", branchName: "codepilot/fix-2001", prUrl: "https://github.com/org/sample-project/pull/42" } }
 
-  /api/ai/suggestions/{suggestionId}/dismiss:
+  /api/suggestions/{suggestionId}/dismiss:
     post:
-      tags: [AI]
+      tags: [Suggestions]
       parameters: 
         - { in: path, name: suggestionId, required: true, schema: { type: integer } }
         - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
