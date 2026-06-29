@@ -33,6 +33,12 @@ components:
     IssueSource:
       type: string
       enum: [AI, ANALYZER]
+    SuggestionApplyStatus:
+      type: string
+      enum: [IN_PROGRESS, COMPLETED, PARTIAL, FAILED]
+    SuggestionApplyItemStatus:
+      type: string
+      enum: [PENDING, APPLIED, FAILED]
 
 security:
   - BearerAuth: []
@@ -505,10 +511,10 @@ paths:
               properties:
                 suggestionIds: { type: array, items: { type: integer } }
       responses:
-        200:
+        202:
           content:
             application/json:
-              example: { status: "success", data: { branchName: "codepilot/batch-fixes-501", prUrl: "https://github.com/org/sample-project/pull/43", appliedCount: 5, failures: {} } }
+              example: { status: "success", data: { suggestionsApplyId: 3001, status: "IN_PROGRESS", message: "Bulk apply job started successfully", suggestionIds: [2001, 2002], branchName: null, prUrl: null, failures: {} } }
 
   /api/suggestions/bulk-dismiss:
     post:
@@ -563,10 +569,10 @@ paths:
         - { in: path, name: suggestionId, required: true, schema: { type: integer } }
         - { in: header, name: X-Requested-With, required: true, schema: { type: string, default: XMLHttpRequest } }
       responses:
-        200:
+        202:
           content:
             application/json:
-              example: { status: "success", data: { id: 2001, status: "APPLIED", branchName: "codepilot/fix-2001", prUrl: "https://github.com/org/sample-project/pull/42" } }
+              example: { status: "success", data: { suggestionsApplyId: 3001, status: "IN_PROGRESS", message: "Apply job started successfully", suggestionIds: [2001], branchName: null, prUrl: null } }
 
   /api/suggestions/{suggestionId}/dismiss:
     post:
@@ -579,6 +585,101 @@ paths:
           content:
             application/json:
               example: { status: "success", data: { id: 2001, status: "DISMISSED" } }
+
+  /api/suggestions/applies/list:
+    get:
+      tags: [Suggestions]
+      parameters:
+        - { in: query, name: projectId, required: true, schema: { type: integer } }
+        - { in: query, name: scanId, required: false, schema: { type: integer } }
+        - { in: query, name: page, required: false, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  - id: 3001
+                    projectId: 101
+                    scanId: 501
+                    userId: 1
+                    branchName: "codepilot/batch-fixes-501-1719581200000"
+                    prUrl: "https://github.com/org/sample-project/pull/43"
+                    status: "PARTIAL"
+                    error: null
+                    createdAt: "2026-06-28T12:00:00Z"
+                    finishedAt: "2026-06-28T12:00:05Z"
+                    user: { id: 1, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
+                    suggestions:
+                      - id: 4001
+                        suggestionsApplyId: 3001
+                        suggestionId: 2001
+                        status: "APPLIED"
+                        error: null
+                        suggestion: { id: 2001, summary: "Apply Parameterized Queries", issueId: 901 }
+                      - id: 4002
+                        suggestionsApplyId: 3001
+                        suggestionId: 2002
+                        status: "FAILED"
+                        error: "Patch could not be applied cleanly"
+                        suggestion: { id: 2002, summary: "Use const instead of let", issueId: 902 }
+                pagination: { page: 1, limit: 20, total: 1 }
+
+  /api/suggestions/applies/{applyId}:
+    get:
+      tags: [Suggestions]
+      parameters: [{ in: path, name: applyId, required: true, schema: { type: integer } }]
+      responses:
+        200:
+          content:
+            application/json:
+              example:
+                status: "success"
+                data:
+                  id: 3001
+                  projectId: 101
+                  scanId: 501
+                  userId: 1
+                  branchName: "codepilot/batch-fixes-501-1719581200000"
+                  prUrl: "https://github.com/org/sample-project/pull/43"
+                  status: "PARTIAL"
+                  error: null
+                  createdAt: "2026-06-28T12:00:00Z"
+                  finishedAt: "2026-06-28T12:00:05Z"
+                  user: { id: 1, username: "sample-user", avatarUrl: "https://avatars.githubusercontent.com/u/1" }
+                  suggestions:
+                    - id: 4001
+                      suggestionsApplyId: 3001
+                      suggestionId: 2001
+                      status: "APPLIED"
+                      error: null
+                      suggestion:
+                        id: 2001
+                        projectId: 101
+                        scanId: 501
+                        issueId: 901
+                        summary: "Apply Parameterized Queries"
+                        explanation: "Sample detailed explanation of the AI suggestion."
+                        diffPatch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -10,1 +10,1 @@\n- db.query('SELECT * FROM users WHERE id = ' + id);\n+ db.query('SELECT * FROM users WHERE id = $1', [id]);"
+                        status: "APPLIED"
+                        generatedAt: "2026-04-10T12:00:00Z"
+                    - id: 4002
+                      suggestionsApplyId: 3001
+                      suggestionId: 2002
+                      status: "FAILED"
+                      error: "Patch could not be applied cleanly"
+                      suggestion:
+                        id: 2002
+                        projectId: 101
+                        scanId: 501
+                        issueId: 902
+                        summary: "Use const instead of let"
+                        explanation: "Prevent reassignment where possible for immutability"
+                        diffPatch: "--- src/utils.ts\n+++ src/utils.ts\n@@ -5,1 +5,1 @@\n- let pi = 3.14;\n+ const pi = 3.14;"
+                        status: "PENDING"
+                        generatedAt: "2026-04-10T12:00:00Z"
 
   /api/ai/statuses:
     get:

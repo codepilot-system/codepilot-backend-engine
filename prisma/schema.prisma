@@ -36,6 +36,19 @@ enum SuggestionStatus {
   DISMISSED
 }
 
+enum SuggestionsApplyStatus {
+  IN_PROGRESS
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum SuggestionsApplyItemStatus {
+  PENDING
+  APPLIED
+  FAILED
+}
+
 enum Severity {
   LOW
   MEDIUM
@@ -72,9 +85,10 @@ model User {
   githubTokenExpiresAt DateTime? @map("github_token_expires_at")
   createdAt            DateTime  @default(now()) @map("created_at")
 
-  projects ProjectMember[]
-  sessions Session[]
-  scans    Scan[]
+  projects         ProjectMember[]
+  sessions         Session[]
+  scans            Scan[]
+  suggestionsApplies SuggestionsApply[]
 
   @@map("users")
 }
@@ -106,11 +120,12 @@ model Project {
   summaryGeneratedAt   DateTime? @map("summary_generated_at")
   createdAt            DateTime  @default(now()) @map("created_at")
 
-  members     ProjectMember[]
-  scans       Scan[]
-  issues      Issue[]
-  suggestions Suggestion[]
-  analytics   Analytics[]
+  members           ProjectMember[]
+  scans             Scan[]
+  issues            Issue[]
+  suggestions       Suggestion[]
+  analytics         Analytics[]
+  suggestionsApplies SuggestionsApply[]
 
   @@unique([provider, githubRepoId])
   @@map("projects")
@@ -141,11 +156,12 @@ model Scan {
   durationMs  Int?       @map("duration_ms")
   scanDate    DateTime   @default(now()) @map("scan_date")
 
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiator User?       @relation(fields: [initiatorId], references: [id], onDelete: SetNull)
-  issues    Issue[]
-  analytics Analytics[]
-  suggestions Suggestion[]
+  project           Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiator         User?       @relation(fields: [initiatorId], references: [id], onDelete: SetNull)
+  issues            Issue[]
+  analytics         Analytics[]
+  suggestions       Suggestion[]
+  suggestionsApplies SuggestionsApply[]
 
   @@index([projectId])
   @@map("scans")
@@ -189,8 +205,47 @@ model Suggestion {
   scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
   issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
+  suggestionItems SuggestionsApplyItem[]
+
   @@index([issueId])
   @@map("suggestions")
+}
+
+model SuggestionsApply {
+  id          Int                   @id @default(autoincrement())
+  projectId   Int                   @map("project_id")
+  scanId      Int                   @map("scan_id")
+  userId      Int                   @map("user_id")
+  branchName  String?               @map("branch_name")
+  prUrl       String?               @map("pr_url")
+  status      SuggestionsApplyStatus @default(IN_PROGRESS)
+  error       String?
+  createdAt   DateTime              @default(now()) @map("created_at")
+  finishedAt  DateTime?             @map("finished_at")
+
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scan        Scan      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  suggestionItems SuggestionsApplyItem[]
+
+  @@index([projectId])
+  @@index([status, createdAt])
+  @@map("suggestion_applies")
+}
+
+model SuggestionsApplyItem {
+  id                Int                   @id @default(autoincrement())
+  suggestionsApply  SuggestionsApply      @relation(fields: [suggestionsApplyId], references: [id], onDelete: Cascade)
+  suggestionsApplyId Int                  @map("suggestion_apply_id")
+  suggestion        Suggestion            @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  suggestionId      Int                   @map("suggestion_id")
+  status            SuggestionsApplyItemStatus @default(PENDING)
+  error             String?
+
+  @@unique([suggestionsApplyId, suggestionId])
+  @@index([suggestionId])
+  @@map("suggestion_apply_items")
 }
 
 model Analytics {
