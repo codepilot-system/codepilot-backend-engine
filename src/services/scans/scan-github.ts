@@ -59,7 +59,7 @@ export async function fetchFileContent(
     try {
         const { data } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
             owner, repo, path, ref,
-            request: { signal: AbortSignal.timeout(15000) },
+            request: { signal: AbortSignal.timeout(60000) },
         });
 
         if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) {

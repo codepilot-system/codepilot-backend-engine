@@ -8,7 +8,8 @@ import {
   leaveProject,
   getProjectMembers,
   discoverProjects,
-  syncProject
+  syncProject,
+  getProjectBranches
 } from './projects.controller';
 
 const router = Router();
@@ -22,5 +23,6 @@ router.delete('/:projectId', deleteProject);
 router.delete('/:projectId/leave', leaveProject);
 router.post('/:projectId/sync', syncProject);
 router.get('/:projectId/members', getProjectMembers);
+router.get('/:projectId/branches', getProjectBranches);
 
 export default router;

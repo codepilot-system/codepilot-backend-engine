@@ -154,3 +154,177 @@ export const searchGithubRepos = async (octokit: any, search: string, page: numb
         totalCount: filteredRepos.length
     };
 };
+
+const GITHUB_TIMEOUT = { signal: AbortSignal.timeout(120000) };
+
+
+export async function ensureBranch(
+    octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
+    owner: string,
+    repo: string,
+    branchName: string,
+    baseSha: string
+): Promise<string> {
+    const createBranch = async (name: string) => {
+        await octokit.request('POST /repos/{owner}/{repo}/git/refs', {
+            owner,
+            repo,
+            ref: `refs/heads/${name}`,
+            sha: baseSha,
+            request: GITHUB_TIMEOUT,
+        });
+    };
+
+    try {
+        await createBranch(branchName);
+        return branchName;
+    } catch (error) {
+        const isBranchExists = typeof error === 'object' && error !== null && 'status' in error && (error as { status: number }).status === 422;
+        if (!isBranchExists) throw error;
+    }
+
+    for (let attempt = 2; attempt <= 10; attempt++) {
+        const candidateName = `${branchName}-v${attempt}`;
+        try {
+            await createBranch(candidateName);
+            return candidateName;
+        } catch (error) {
+            const isBranchExists = typeof error === 'object' && error !== null && 'status' in error && (error as { status: number }).status === 422;
+            if (!isBranchExists) throw error;
+        }
+    }
+
+    throw new ApiError(`Failed to create unique branch name after 10 attempts for ${branchName}. Please delete unneeded branches first.`, 400);
+}
+
+export async function findOpenPrUrl(
+    octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
+    owner: string,
+    repo: string,
+    headBranch: string,
+    baseBranch: string
+): Promise<string | null> {
+    const { data: prs } = await octokit.request('GET /repos/{owner}/{repo}/pulls', {
+        owner,
+        repo,
+        state: 'open',
+        head: `${owner}:${headBranch}`,
+        base: baseBranch,
+        request: GITHUB_TIMEOUT,
+    });
+    return prs[0]?.html_url ?? null;
+}
+
+export async function createPullRequest(
+    octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
+    owner: string,
+    repo: string,
+    title: string,
+    body: string,
+    headBranch: string,
+    baseBranch: string
+): Promise<string> {
+    const { data: pr } = await octokit.request('POST /repos/{owner}/{repo}/pulls', {
+        owner,
+        repo,
+        title,
+        body,
+        head: headBranch,
+        base: baseBranch,
+        request: GITHUB_TIMEOUT,
+    });
+    return pr.html_url;
+}
+
+export async function isBranchCreatedByCodePilot(
+    octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
+    owner: string,
+    repo: string,
+    branchName: string
+): Promise<boolean> {
+    try {
+        const { data: ref } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/heads/{branch}', {
+            owner,
+            repo,
+            branch: branchName,
+            request: GITHUB_TIMEOUT,
+        });
+        const { data: commit } = await octokit.request('GET /repos/{owner}/{repo}/commits/{sha}', {
+            owner,
+            repo,
+            sha: ref.object.sha,
+            request: GITHUB_TIMEOUT,
+        });
+        return commit.author?.login === ENV.GITHUB_APP_BOT_LOGIN;
+    } catch (error) {
+        const isNotFound = typeof error === 'object' && error !== null && 'status' in error && (error as { status: number }).status === 404;
+        return !isNotFound ? false : false;
+    }
+}
+
+export async function createCommit(
+    octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
+    owner: string,
+    repo: string,
+    branchName: string,
+    baseSha: string,
+    fileContents: Record<string, string>,
+    commitMessage: string
+): Promise<void> {
+    const { data: baseCommit } = await octokit.request('GET /repos/{owner}/{repo}/commits/{ref}', {
+        owner,
+        repo,
+        ref: baseSha,
+        request: GITHUB_TIMEOUT,
+    });
+    const baseTreeSha = baseCommit.commit.tree.sha;
+
+    const treeEntries: Array<{
+        path: string;
+        mode: '100644' | '100755' | '040000' | '160000' | '120000';
+        type: 'blob' | 'tree' | 'commit';
+        sha?: string;
+        content?: string;
+    }> = [];
+
+    for (const [filePath, content] of Object.entries(fileContents)) {
+        const { data: blob } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
+            owner,
+            repo,
+            content: Buffer.from(content).toString('base64'),
+            encoding: 'base64',
+            request: GITHUB_TIMEOUT,
+        });
+        treeEntries.push({
+            path: filePath,
+            mode: '100644',
+            type: 'blob',
+            sha: blob.sha,
+        });
+    }
+
+    const { data: newTree } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', {
+        owner,
+        repo,
+        base_tree: baseTreeSha,
+        tree: treeEntries,
+        request: GITHUB_TIMEOUT,
+    });
+
+    const { data: newCommit } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
+        owner,
+        repo,
+        message: commitMessage,
+        tree: newTree.sha,
+        parents: [baseSha],
+        request: GITHUB_TIMEOUT,
+    });
+
+    await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
+        owner,
+        repo,
+        ref: `heads/${branchName}`,
+        sha: newCommit.sha,
+        request: GITHUB_TIMEOUT,
+    });
+}

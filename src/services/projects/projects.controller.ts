@@ -151,3 +151,18 @@ export const syncProject = async (req: AuthRequest, res: Response) => {
     data: result,
   });
 };
+
+export const getProjectBranches = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw new ApiError('Unauthorized', 401);
+
+  const projectId = parseInt(req.params.projectId as string, 10);
+  if (isNaN(projectId)) throw new ApiError('Invalid project ID', 400);
+
+  const branches = await projectsService.getProjectBranches(userId, projectId);
+
+  res.status(200).json({
+    status: 'success',
+    data: branches,
+  });
+};
