@@ -9,8 +9,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
     }
 
     try {
-        const currentPage = parseInt(page as string) || 1;
-        const currentLimit = parseInt(limit as string) || 20;
+        const currentPage = Math.max(1, parseInt(page as string) || 1);
+        const currentLimit = Math.min(50, Math.max(1, parseInt(limit as string) || 20));
 
         const { analytics, total } = await getAnalyticsService(
             parseInt(projectId as string),

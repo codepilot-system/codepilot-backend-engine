@@ -36,8 +36,8 @@ export const getProjectScans = async (req: AuthRequest, res: Response) => {
     const { projectId, status, page, limit } = req.query;
     if (!projectId) throw new ApiError('projectId is required', 400);
 
-    const currentPage = parseInt(page as string) || 1;
-    const currentLimit = parseInt(limit as string) || 20;
+        const currentPage = Math.max(1, parseInt(page as string) || 1);
+        const currentLimit = Math.min(50, Math.max(1, parseInt(limit as string) || 20));
 
     let parsedStatus: ScanStatus | undefined;
     if (status) {

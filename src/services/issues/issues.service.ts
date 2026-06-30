@@ -15,7 +15,6 @@ interface CreateIssueInput {
 }
 
 export const createIssues = async (issues: CreateIssueInput[], scanId: number, projectId: number) => {
-
     return prisma.issue.createMany({
         data: issues.map(issue => ({
             projectId,
@@ -39,29 +38,32 @@ export const getIssuesByProject = async (
         severity?: Severity;
         category?: Category;
         status?: IssueStatus;
+        source?: IssueSource;
+        scanId?: number;
     },
     page: number = 1,
     limit: number = 20
 ) => {
     const skip = (page - 1) * limit;
 
+    const where = {
+        projectId,
+        ...(filters?.severity && { severity: filters.severity }),
+        ...(filters?.category && { category: filters.category }),
+        ...(filters?.status && { status: filters.status }),
+        ...(filters?.source && { source: filters.source }),
+        ...(filters?.scanId && { scanId: filters.scanId }),
+    };
+
     const [issues, total] = await prisma.$transaction([
         prisma.issue.findMany({
-            where: {
-                projectId,
-                ...filters,
-            },
+            where,
             include: { suggestions: true },
             orderBy: { detectedAt: 'desc' },
             skip,
             take: limit,
         }),
-        prisma.issue.count({
-            where: {
-                projectId,
-                ...filters,
-            }
-        })
+        prisma.issue.count({ where })
     ]);
 
     return { issues, total };
@@ -76,7 +78,6 @@ export const getIssueById = async (issueId: number) => {
     })
 }
 
-
 export const updateIssueStatus = async (
     issueId: number,
     status: IssueStatus
@@ -86,8 +87,6 @@ export const updateIssueStatus = async (
         data: { status }
     });
 };
-
-
 
 export const createSuggestions = async (
     suggestions: {
@@ -106,7 +105,3 @@ export const createSuggestions = async (
         }))
     });
 };
-
-
-
-
