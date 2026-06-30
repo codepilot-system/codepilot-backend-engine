@@ -109,22 +109,4 @@ export const createSuggestions = async (
 
 
 
-export const applyPatch = async (issueId: number) => {
-    const suggestion = await prisma.suggestion.findFirst({
-        where: { issueId }
-    });
 
-    if (!suggestion) {
-        throw new ApiError('No suggestion found for this issue', 404);
-    }
-
-    // TODO: send diffPatch to VS Code extension via WebSocket
-    // This will be implemented when VS Code extension is ready
-
-    await prisma.suggestion.update({
-        where: { id: suggestion.id },
-        data: { status: SuggestionStatus.APPLIED }
-    });
-
-    return updateIssueStatus(issueId, IssueStatus.FIXED);
-};

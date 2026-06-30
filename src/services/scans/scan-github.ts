@@ -1,9 +1,14 @@
 import { ApiError } from '../../lib/ApiError';
 import { getInstallationOctokit } from '../github/github.service';
+import pLimit from 'p-limit';
 
 const SCANNABLE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.java']);
 const MAX_FILE_SIZE_BYTES = 200_000;
 const MAX_FILES_PER_SCAN = 150;
+const GITHUB_FETCH_CONCURRENCY =
+    Number(process.env.GITHUB_FETCH_CONCURRENCY ?? 5);
+
+const limit = pLimit(GITHUB_FETCH_CONCURRENCY);
 
 
 export interface FetchedFile {
@@ -85,13 +90,20 @@ export async function fetchRepoFiles(
         throw new ApiError('No scannable files found in this repository', 404);
 
     const results = await Promise.allSettled(
-        paths.map(async (filePath) => {
-            const content = await fetchFileContent(installationId, owner, repo, filePath, ref);
-            return content !== null ? { filePath, content } : null;
-        })
-    );
+        paths.map((filePath) =>
+            limit(async () => {
+                const content = await fetchFileContent(
+                    installationId,
+                    owner,
+                    repo,
+                    filePath,
+                    ref
+                );
 
-    const files: FetchedFile[] = [];
+                return content !== null ? { filePath, content } : null;
+            })
+        )
+    ); const files: FetchedFile[] = [];
     for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
             files.push(result.value);

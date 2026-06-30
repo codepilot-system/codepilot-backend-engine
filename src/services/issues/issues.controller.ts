@@ -4,7 +4,6 @@ import {
     getIssuesByProject,
     getIssueById as getIssueByIdService,
     updateIssueStatus,
-    applyPatch
 } from './issues.service';
 
 export const getIssues = async (req: Request, res: Response) => {
@@ -87,17 +86,4 @@ export const patchIssue = async (req: Request, res: Response) => {
     }
 };
 
-export const applyIssuePatch = async (req: Request, res: Response) => {
-    const { issueId } = req.params;
 
-    try {
-        await applyPatch(parseInt(issueId as string));
-
-        return res.status(200).json({
-            status: "success",
-            message: "Patch applied successfully",
-        });
-    } catch (error) {
-        return res.status(500).json({ status: "error", message: "Failed to apply patch" });
-    }
-};

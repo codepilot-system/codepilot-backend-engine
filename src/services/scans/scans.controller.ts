@@ -97,6 +97,7 @@ export const analyzeLocalCode = async (req: AuthRequest, res: Response) => {
     res.status(201).json({ status: 'success', data: result });
 };
 
+
 export const getScanReport = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) throw new ApiError('Unauthorized', 401);
@@ -104,7 +105,11 @@ export const getScanReport = async (req: AuthRequest, res: Response) => {
     const scanId = parseInt(req.params.scanId as string, 10);
     if (isNaN(scanId)) throw new ApiError('Invalid scan ID', 400);
 
-    await scansService.getScanReport(userId, scanId);
+    const { buffer, filename } = await scansService.getScanReport(userId, scanId);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(buffer);
 };
 
 export const deleteScan = async (req: AuthRequest, res: Response) => {

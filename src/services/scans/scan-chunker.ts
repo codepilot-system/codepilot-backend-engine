@@ -3,7 +3,7 @@ import { analyzeRepoScan } from '../ai/ai.service';
 
 const CHUNK_CHAR_BUDGET = 350_000;
 
-const CHUNK_MAX_FILES = 20;
+const CHUNK_MAX_FILES = 10;
 
 export interface RepoScanChunkResult {
     issues: ScanIssue[];

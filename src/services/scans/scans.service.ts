@@ -4,8 +4,7 @@ import { ScanStatus } from '@prisma/client';
 import { analyzeLocalScan, CodeFile } from '../ai/ai.service';
 import { runRepoScanPipeline } from './scan-pipeline';
 import { analyzeFileContents } from './analysis/analyzer';
-import { buildFindingsSummaryText } from './scan-findings-bridge';
-
+import { buildScanReportPdf } from './scan-report.pdf';
 
 
 
@@ -221,11 +220,48 @@ export const getScanReport = async (userId: number, scanId: number) => {
     const scan = await prisma.scan.findFirst({
         where: {
             id: scanId,
-            project: { members: { some: { userId } } }
-        }
+            project: { members: { some: { userId } } },
+        },
+        include: {
+            project: {
+                select: {
+                    id: true,
+                    name: true,
+                    owner: true,
+                    repoName: true,
+                    repoUrl: true,
+                    provider: true,
+                },
+            },
+            analytics: true,
+            issues: {
+                include: { suggestions: true },
+                orderBy: [
+                    { severity: 'desc' },
+                    { category: 'asc' },
+                    { filePath: 'asc' },
+                    { lineNumber: 'asc' },
+                ],
+            },
+            initiator: { select: { username: true } },
+        },
     });
 
     if (!scan) throw new ApiError('Scan not found or access denied', 404);
 
-    throw new ApiError('Report generation not yet implemented', 501);
-};
+    if (scan.status !== 'COMPLETED') {
+        throw new ApiError('Report is only available for completed scans', 400);
+    }
+
+    if (scan.analytics.length === 0) {
+        throw new ApiError('Internal server error', 500);
+    }
+
+    const analytics = scan.analytics[0];
+    const buffer = await buildScanReportPdf({ scan, analytics });
+
+    return {
+        buffer,
+        filename: `codepilot-scan-${scanId}-report.pdf`,
+    };
+}

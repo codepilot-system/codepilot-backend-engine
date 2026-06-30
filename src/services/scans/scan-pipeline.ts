@@ -98,8 +98,8 @@ export async function runRepoScanPipeline(scanId: number): Promise<void> {
                 aiResult.issues.map((issue) => ({
                     filePath: issue.filePath,
                     lineNumber: issue.lineNumber ?? 0,
-                    severity: issue.severity as Severity,
-                    category: issue.category as Category,
+                    severity: sanitizeSeverity(issue.severity),
+                    category: sanitizeCategory(issue.category),
                     summary: issue.summary,
                     explanation: issue.explanation,
                     codeSnippet: issue.codeSnippet,
@@ -204,6 +204,54 @@ function mapAnalyzerSeverity(severity: string): Severity {
         CRITICAL: 'CRITICAL',
     };
     return map[severity] ?? 'MEDIUM';
+}
+
+/**
+ * Clamps an AI-returned severity string to a valid Severity enum value.
+ * Falls back to MEDIUM if the model returns an unknown value.
+ */
+function sanitizeSeverity(value: string): Severity {
+    const valid = new Set<Severity>(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+    const upper = value?.toUpperCase() as Severity;
+    if (valid.has(upper)) return upper;
+    console.warn(`[ScanPipeline] Unknown severity from AI: "${value}" — defaulting to MEDIUM`);
+    return 'MEDIUM';
+}
+
+/**
+ * Clamps an AI-returned category string to a valid Category enum value.
+ * Maps common AI hallucinations to the closest valid value,
+ * then falls back to OTHER for anything unrecognised.
+ */
+function sanitizeCategory(value: string): Category {
+    const valid = new Set<Category>([
+        'CODE_SMELL', 'DEAD_CODE', 'DUPLICATE', 'COMPLEXITY',
+        'SRP_VIOLATION', 'SECURITY', 'PERFORMANCE', 'FUNCTIONALITY', 'OTHER',
+    ]);
+    const upper = value?.toUpperCase() as Category;
+    if (valid.has(upper)) return upper;
+
+    const fallbackMap: Record<string, Category> = {
+        NAMING: 'CODE_SMELL',
+        MAINTAINABILITY: 'CODE_SMELL',
+        READABILITY: 'CODE_SMELL',
+        STYLE: 'CODE_SMELL',
+        BUG: 'FUNCTIONALITY',
+        ERROR_HANDLING: 'FUNCTIONALITY',
+        NULL_CHECK: 'FUNCTIONALITY',
+        MEMORY: 'PERFORMANCE',
+        CONCURRENCY: 'SECURITY',
+        INJECTION: 'SECURITY',
+    };
+
+    const mapped = fallbackMap[upper];
+    if (mapped) {
+        console.warn(`[ScanPipeline] Unknown category from AI: "${value}" — mapped to ${mapped}`);
+        return mapped;
+    }
+
+    console.warn(`[ScanPipeline] Unknown category from AI: "${value}" — defaulting to OTHER`);
+    return 'OTHER';
 }
 
 function mapAnalyzerIssueType(issueType: string): Category {
