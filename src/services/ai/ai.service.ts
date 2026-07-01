@@ -39,6 +39,25 @@ CRUCIAL INSTRUCTIONS FOR "suggestedFixDiff":
 4. Include enough context lines (unmodified lines) to make the patch unambiguous!
 5. Format the diff correctly with @@ lines showing line numbers!`;
 
+const BULK_FIX_SYSTEM_PROMPT = `You are an expert code fixer. Your task is to apply as many of the suggested fixes as possible to the original file.
+
+For each suggestion, you have:
+- suggestionId: unique ID for the suggestion
+- diffPatch: unified diff to apply
+- summary: what the fix does
+
+You MUST return ONLY valid JSON matching this exact structure, with no extra text or markdown:
+{
+  "modifiedFile": "string (the FULL modified file content)",
+  "appliedSuggestionIds": [array of suggestion IDs that were successfully applied],
+  "failedSuggestions": [
+    {
+      "id": "suggestion ID that failed",
+      "reason": "why it failed (e.g., conflict with another fix)"
+    }
+  ]
+}`;
+
 const SUMMARY_SYSTEM_PROMPT = `You are an expert software architect. Analyze the provided codebase files and generate a concise architectural summary. Your summary MUST include:
 1. Core frameworks, runtime, and language version
 2. Design patterns used (e.g. service layer, repository pattern, middleware chain)
@@ -224,6 +243,100 @@ export function analyzeRepoScan(files: CodeFile[], projectId: string, preferredM
   : Promise<AnalysisResult> {
   if (!projectId) throw new ApiError('A valid project ID is required to perform a repo scan.', 400);
   return runAnalysis('repo', files, projectId, preferredModel, projectSummary, importedContext, folderTree, dependencies);
+}
+
+export async function applyBulkFixes(
+  filePath: string,
+  originalContent: string,
+  suggestions: Array<{ id: number; diffPatch: string; summary: string }>,
+  preferredModel?: string,
+): Promise<{
+  modifiedFile?: string;
+  appliedSuggestionIds: number[];
+  failedSuggestions: Array<{ id: number; reason: string }>;
+  modelUsed: string;
+  tokensUsed: number;
+}> {
+  let models = [...MODELS_BY_SCAN_TYPE.repo];
+  if (preferredModel) models = [preferredModel, ...models.filter(m => m !== preferredModel)];
+
+  const suggestionsBlock = suggestions.map((s) => `Suggestion ID: ${s.id}
+Summary: ${s.summary}
+Diff Patch:
+${s.diffPatch}`).join('\n\n---\n\n');
+
+  const prompt = `Original file (${filePath}):
+\`\`\`
+${originalContent}
+\`\`\`
+
+Suggestions to apply:
+${suggestionsBlock}
+
+Please apply as many suggestions as possible and return the full modified file along with which suggestions were applied and which failed.`;
+
+  const inputTokens = Math.ceil((BULK_FIX_SYSTEM_PROMPT.length + prompt.length) / 3.2);
+  const maxOutput = 8000;
+
+  for (const model of models) {
+    const cb = await getCircuitBreakerStatus(model);
+    if (cb) continue;
+    if (inputTokens + maxOutput > MODEL_TOKEN_LIMITS[model]) continue;
+
+    console.log("[AI Prompt] Applying bulk fixes with model:", model);
+    console.log(prompt);
+    console.log("----------------------------------------------------------------------");
+    try {
+      const response = await groqClient.chat.completions.create({
+        messages: [
+          { role: 'system', content: BULK_FIX_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        model,
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        max_tokens: maxOutput,
+        ...(REASONING_MODELS.has(model) && { reasoning_format: 'hidden' }),
+      } as any);
+      console.log("[AI Response] Bulk fixes applied with model:", model);
+      console.log(response);
+      console.log("AI message:\n", response.choices[0]?.message?.content);
+      console.log("----------------------------------------------------------------------");
+
+      const rawText = response.choices[0]?.message?.content ?? '';
+      if (!rawText) continue;
+
+      let jsonString = rawText;
+      const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (markdownMatch) jsonString = markdownMatch[1];
+      jsonString = jsonString.trim();
+
+      const parsed = JSON.parse(jsonString) as {
+        modifiedFile?: string;
+        appliedSuggestionIds?: (number | string)[];
+        failedSuggestions?: Array<{ id: number | string; reason: string }>;
+      };
+
+      return {
+        modifiedFile: parsed.modifiedFile,
+        appliedSuggestionIds: (parsed.appliedSuggestionIds ?? []).map(id => Number(id)),
+        failedSuggestions: (parsed.failedSuggestions ?? []).map(s => ({ id: Number(s.id), reason: s.reason })),
+        modelUsed: model,
+        tokensUsed: response.usage?.total_tokens ?? 0,
+      };
+    } catch (error) {
+      console.error(`Error applying bulk fixes with model ${model}:`, error);
+      await tripCircuitBreaker(model, error);
+      continue;
+    }
+  }
+
+  return {
+    appliedSuggestionIds: [],
+    failedSuggestions: suggestions.map(s => ({ id: s.id, reason: 'All AI models failed to apply fixes' })),
+    modelUsed: '',
+    tokensUsed: 0,
+  };
 }
 
 export async function generateProjectSummary(files: CodeFile[], folderTree?: string, dependencies?: string): Promise<{ summary: string; brief: string; modelUsed: string; tokensUsed: number; durationMs: number }> {

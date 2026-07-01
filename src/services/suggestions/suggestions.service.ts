@@ -1,9 +1,21 @@
 import prisma from '../../lib/prisma';
 import { ApiError } from '../../lib/ApiError';
-import { SuggestionStatus, SuggestionsApplyStatus, SuggestionsApplyItemStatus } from '@prisma/client';
+import { SuggestionStatus, SuggestionsApplyStatus, SuggestionsApplyItemStatus, Prisma } from '@prisma/client';
 import { getInstallationOctokit, ensureBranch, findOpenPrUrl, createCommit, createPullRequest, isBranchCreatedByCodePilot } from '../github/github.service';
 import { fetchFileContent } from '../scans/scan-github';
 import { applyPatch } from 'diff';
+import { applyBulkFixes } from '../ai/ai.service';
+
+// Type for suggestion apply items with relations
+type SuggestionApplyItemWithRelations = Prisma.SuggestionsApplyItemGetPayload<{
+  include: {
+    suggestion: {
+      include: {
+        issue: true;
+      };
+    };
+  };
+}>;
 
 const STALE_APPLY_MINUTES = 15;
 const APPLY_TIMEOUT_ERROR = 'Apply job timed out';
@@ -139,38 +151,50 @@ async function resolveReusableExactApply(
   return null;
 }
 
-function isRealDiff(patch: string): boolean {
-  return patch.includes('@@') || patch.startsWith('---') || patch.startsWith('+++') ||
-    patch.split('\n').some(line => line.startsWith('-') || line.startsWith('+'));
-}
-
-function extractFixedCodeFromDiff(diff: string): string | null {
-  const lines = diff.split('\n');
-  const fixedLines: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('+') && !line.startsWith('+++')) {
-      fixedLines.push(line.slice(1));
-    } else if (!line.startsWith('-') && !line.startsWith('---') && !line.startsWith('@@')) {
-      fixedLines.push(line);
-    }
-  }
-  return fixedLines.length > 0 ? fixedLines.join('\n') : null;
+function isUnifiedDiff(patch: string): boolean {
+  return patch.includes('@@') && (patch.includes('---') || patch.includes('+++'));
 }
 
 function tryApplyPatch(oldContent: string, diffPatch: string): string | false {
-  if (!isRealDiff(diffPatch)) {
-    return diffPatch;
+  const trimmed = diffPatch.trim();
+  if (!trimmed) return false;
+
+  if (!isUnifiedDiff(trimmed)) {
+    return false;
   }
+
   try {
-    const patched = applyPatch(oldContent, diffPatch);
-    if (patched !== false) {
-      return patched;
+    const patched = applyPatch(oldContent, trimmed);
+    if (patched) return patched;
+  } 
+  catch (error) {}
+  return false;
+}
+
+
+function applyPatchesSequentially(
+  originalContent: string,
+  itemsForFile: Array<{ applyItem: SuggestionApplyItemWithRelations; suggestion: SuggestionApplyItemWithRelations['suggestion'] }>
+): {
+  patchedContent: string;
+  appliedItems: Array<{ id: number }>;
+  failedItems: Array<{ id: number; error: string }>;
+} {
+  let content = originalContent;
+  const appliedItems: Array<{ id: number }> = [];
+  const failedItems: Array<{ id: number; error: string }> = [];
+
+  for (const { suggestion: sug } of itemsForFile) {
+    const patched = tryApplyPatch(content, sug.diffPatch);
+    if (patched === false) {
+      failedItems.push({ id: sug.id, error: 'Patch could not be applied' });
+    } else {
+      content = patched;
+      appliedItems.push({ id: sug.id });
     }
-  } catch (error) {
-    // Fall through to extraction
   }
-  const extracted = extractFixedCodeFromDiff(diffPatch);
-  return extracted || false;
+
+  return { patchedContent: content, appliedItems, failedItems };
 }
 
 
@@ -182,12 +206,12 @@ async function processSingleSuggestionsApply(applyId: number) {
     const apply = await prisma.suggestionsApply.findUnique({
       where: { id: applyId },
       include: {
+        scan: { include: { project: true } },
         suggestionItems: {
           include: {
             suggestion: {
               include: {
-                issue: true,
-                scan: { include: { project: true } }
+                issue: true
               }
             }
           }
@@ -195,7 +219,7 @@ async function processSingleSuggestionsApply(applyId: number) {
       }
     });
 
-    if (!apply || apply.suggestionItems.length !== 1) {
+    if (!apply || !apply.scan || apply.suggestionItems.length !== 1) {
       throw new Error('Invalid apply record');
     }
 
@@ -206,7 +230,8 @@ async function processSingleSuggestionsApply(applyId: number) {
 
     const applyItem = apply.suggestionItems[0];
     const sug = applyItem.suggestion;
-    const { issue, scan } = sug;
+    const { issue } = sug;
+    const scan = apply.scan;
     const { project } = scan;
 
     if (!project.installationId) throw new Error('GitHub App is not installed');
@@ -215,8 +240,25 @@ async function processSingleSuggestionsApply(applyId: number) {
     const currentContent = await fetchFileContent(project.installationId, project.owner, project.repoName, issue.filePath, scan.commitSha);
     if (currentContent === null) throw new Error(`Could not fetch file ${issue.filePath}`);
 
-    const patchedContent = tryApplyPatch(currentContent, sug.diffPatch);
-    if (patchedContent === false) throw new Error(`Patch could not be applied to ${issue.filePath}`);
+    // First try static patch
+    let patchedContent = tryApplyPatch(currentContent, sug.diffPatch);
+    
+    // If static patch fails, try AI
+    if (patchedContent === false) {
+      console.log(`[processSingleSuggestionsApply] Static patch failed, trying AI for suggestion ${sug.id}`);
+      const aiResult = await applyBulkFixes(
+        issue.filePath,
+        currentContent,
+        [{ id: sug.id, diffPatch: sug.diffPatch, summary: sug.summary }]
+      );
+
+      if (aiResult.modifiedFile && aiResult.appliedSuggestionIds.includes(sug.id)) {
+        patchedContent = aiResult.modifiedFile;
+        console.log(`[processSingleSuggestionsApply] AI succeeded for suggestion ${sug.id}`);
+      } else {
+        throw new Error(`Patch could not be applied (static and AI both failed for ${issue.filePath}`);
+      }
+    }
 
     if (!(await isApplyStillInProgress(applyId))) {
       console.log(`[processSingleSuggestionsApply] Stopping applyId ${applyId} before GitHub write because it is no longer active`);
@@ -347,12 +389,12 @@ async function processBulkSuggestionsApply(applyId: number) {
     const apply = await prisma.suggestionsApply.findUnique({
       where: { id: applyId },
       include: {
+        scan: { include: { project: true } },
         suggestionItems: {
           include: {
             suggestion: {
               include: {
-                issue: true,
-                scan: { include: { project: true } }
+                issue: true
               }
             }
           }
@@ -360,7 +402,7 @@ async function processBulkSuggestionsApply(applyId: number) {
       }
     });
 
-    if (!apply || apply.suggestionItems.length === 0) throw new Error('Invalid apply record');
+    if (!apply || !apply.scan || apply.suggestionItems.length === 0) throw new Error('Invalid apply record');
 
     if (apply.status !== SuggestionsApplyStatus.IN_PROGRESS) {
       console.log(`[processBulkSuggestionsApply] Skipping applyId ${applyId} because it is no longer active`);
@@ -369,45 +411,95 @@ async function processBulkSuggestionsApply(applyId: number) {
 
     const applyItems = apply.suggestionItems;
     const suggestions = applyItems.map(item => item.suggestion);
-    const project = suggestions[0].scan.project;
-    const scanId = suggestions[0].scanId;
+    const project = apply.scan.project;
+    const scanId = apply.scanId;
     const installationId = project.installationId;
     const owner = project.owner;
     const repoName = project.repoName;
-    const commitSha = suggestions[0].scan.commitSha;
-    const baseBranch = suggestions[0].scan.branchName;
+    const commitSha = apply.scan.commitSha;
+    const baseBranch = apply.scan.branchName;
 
     if (!installationId) throw new Error('GitHub App is not installed');
     if (!commitSha) throw new Error('No commit SHA');
+
+    const suggestionsByFile: Record<string, Array<{
+      applyItem: SuggestionApplyItemWithRelations;
+      suggestion: SuggestionApplyItemWithRelations['suggestion'];
+    }>> = {};
+    for (const applyItem of applyItems) {
+      const sug = applyItem.suggestion;
+      const filePath = sug.issue.filePath;
+      if (!suggestionsByFile[filePath]) {
+        suggestionsByFile[filePath] = [];
+      }
+      suggestionsByFile[filePath].push({ applyItem, suggestion: sug });
+    }
 
     const fileContents: Record<string, string> = {};
     const succeededApplyItems: typeof applyItems = [];
     const failedApplyItems: Array<{ item: typeof applyItems[0]; error: string }> = [];
 
-    for (const applyItem of applyItems) {
-      const sug = applyItem.suggestion;
-      const filePath = sug.issue.filePath;
+    for (const [filePath, itemsForFile] of Object.entries(suggestionsByFile)) {
       try {
-        if (!(filePath in fileContents)) {
-          const content = await fetchFileContent(installationId, owner, repoName, filePath, commitSha);
-          if (content === null) {
+        const originalContent = await fetchFileContent(installationId, owner, repoName, filePath, commitSha);
+        if (originalContent === null) {
+          for (const { applyItem } of itemsForFile) {
             failedApplyItems.push({ item: applyItem, error: `Could not fetch file ${filePath} from GitHub` });
-            continue;
           }
-          fileContents[filePath] = content;
-        }
-
-        const patched = tryApplyPatch(fileContents[filePath], sug.diffPatch);
-        if (patched === false) {
-          failedApplyItems.push({ item: applyItem, error: `Patch could not be applied cleanly to ${filePath}` });
           continue;
         }
-        fileContents[filePath] = patched;
-        succeededApplyItems.push(applyItem);
+
+        console.log(`[processBulkSuggestionsApply] Trying AI bulk approach for ${filePath}`);
+        const aiResult = await applyBulkFixes(
+          filePath,
+          originalContent,
+          itemsForFile.map(({ suggestion }) => ({
+            id: suggestion.id,
+            diffPatch: suggestion.diffPatch,
+            summary: suggestion.summary
+          }))
+        );
+
+        if (aiResult.modifiedFile) {
+          console.log(`[processBulkSuggestionsApply] AI succeeded for ${filePath}`);
+          fileContents[filePath] = aiResult.modifiedFile;
+
+          const appliedIds = new Set(aiResult.appliedSuggestionIds);
+          for (const { applyItem, suggestion } of itemsForFile) {
+            if (appliedIds.has(suggestion.id)) {
+              succeededApplyItems.push(applyItem);
+            } else {
+              const fail = aiResult.failedSuggestions.find(f => f.id === suggestion.id);
+              failedApplyItems.push({
+                item: applyItem,
+                error: fail?.reason || 'Failed to apply (AI)'
+              });
+            }
+          }
+        } else {
+          console.log(`[processBulkSuggestionsApply] AI failed, using fallback for ${filePath}`);
+          const fallbackResult = applyPatchesSequentially(originalContent, itemsForFile);
+          fileContents[filePath] = fallbackResult.patchedContent;
+
+          const appliedIds = new Set(fallbackResult.appliedItems.map(i => i.id));
+          for (const { applyItem, suggestion } of itemsForFile) {
+            if (appliedIds.has(suggestion.id)) {
+              succeededApplyItems.push(applyItem);
+            } else {
+              const fail = fallbackResult.failedItems.find(f => f.id === suggestion.id);
+              failedApplyItems.push({
+                item: applyItem,
+                error: fail?.error || 'Failed to apply (fallback)'
+              });
+            }
+          }
+        }
       } catch (error) {
-        console.error('[processBulkSuggestionsApply] Error applying suggestion', sug.id, error);
+        console.error(`[processBulkSuggestionsApply] Error processing file ${filePath}`, error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        failedApplyItems.push({ item: applyItem, error: `Unexpected error while applying patch to ${filePath}: ${errorMessage}` });
+        for (const { applyItem } of itemsForFile) {
+          failedApplyItems.push({ item: applyItem, error: `Error processing ${filePath}: ${errorMessage}` });
+        }
       }
     }
 
@@ -701,10 +793,11 @@ export const dismissAISuggestion = async (userId: number, suggestionId: number) 
   });
 
   if (!suggestion) throw new ApiError('Suggestion not found', 404);
+  
+  await validateUserAccess(userId, suggestion.projectId);
+
   if (suggestion.status === SuggestionStatus.DISMISSED)
     throw new ApiError('Suggestion has already been dismissed', 409);
-
-  await validateUserAccess(userId, suggestion.projectId);
 
   const updated = await prisma.suggestion.update({
     where: { id: suggestionId },
@@ -735,7 +828,7 @@ export const bulkApplyAISuggestions = async (userId: number, suggestionIds: numb
         continue;
       }
       if (seenIssueIds.has(sug.issueId)) {
-        failures[id] = 'Another suggestion for this issue is already being applied';
+        failures[id] = 'Only one suggestion per issue can be included in a bulk apply';
         continue;
       }
       seenIssueIds.add(sug.issueId);

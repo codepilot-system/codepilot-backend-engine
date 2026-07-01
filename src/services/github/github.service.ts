@@ -155,7 +155,7 @@ export const searchGithubRepos = async (octokit: any, search: string, page: numb
     };
 };
 
-const GITHUB_TIMEOUT = { signal: AbortSignal.timeout(120000) };
+const getGithubTimeout = () => ({ signal: AbortSignal.timeout(120000) });
 
 
 export async function ensureBranch(
@@ -171,7 +171,7 @@ export async function ensureBranch(
             repo,
             ref: `refs/heads/${name}`,
             sha: baseSha,
-            request: GITHUB_TIMEOUT,
+            request: getGithubTimeout(),
         });
     };
 
@@ -210,7 +210,7 @@ export async function findOpenPrUrl(
         state: 'open',
         head: `${owner}:${headBranch}`,
         base: baseBranch,
-        request: GITHUB_TIMEOUT,
+        request: getGithubTimeout(),
     });
     return prs[0]?.html_url ?? null;
 }
@@ -231,7 +231,7 @@ export async function createPullRequest(
         body,
         head: headBranch,
         base: baseBranch,
-        request: GITHUB_TIMEOUT,
+        request: getGithubTimeout(),
     });
     return pr.html_url;
 }
@@ -247,13 +247,13 @@ export async function isBranchCreatedByCodePilot(
             owner,
             repo,
             branch: branchName,
-            request: GITHUB_TIMEOUT,
+            request: getGithubTimeout(),
         });
         const { data: commit } = await octokit.request('GET /repos/{owner}/{repo}/commits/{sha}', {
             owner,
             repo,
             sha: ref.object.sha,
-            request: GITHUB_TIMEOUT,
+            request: getGithubTimeout(),
         });
         return commit.author?.login === ENV.GITHUB_APP_BOT_LOGIN;
     } catch (error) {
@@ -275,7 +275,7 @@ export async function createCommit(
         owner,
         repo,
         ref: baseSha,
-        request: GITHUB_TIMEOUT,
+        request: getGithubTimeout(),
     });
     const baseTreeSha = baseCommit.commit.tree.sha;
 
@@ -293,7 +293,7 @@ export async function createCommit(
             repo,
             content: Buffer.from(content).toString('base64'),
             encoding: 'base64',
-            request: GITHUB_TIMEOUT,
+            request: getGithubTimeout(),
         });
         treeEntries.push({
             path: filePath,
@@ -308,7 +308,7 @@ export async function createCommit(
         repo,
         base_tree: baseTreeSha,
         tree: treeEntries,
-        request: GITHUB_TIMEOUT,
+        request: getGithubTimeout(),
     });
 
     const { data: newCommit } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
@@ -317,7 +317,7 @@ export async function createCommit(
         message: commitMessage,
         tree: newTree.sha,
         parents: [baseSha],
-        request: GITHUB_TIMEOUT,
+        request: getGithubTimeout(),
     });
 
     await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
@@ -325,6 +325,6 @@ export async function createCommit(
         repo,
         ref: `heads/${branchName}`,
         sha: newCommit.sha,
-        request: GITHUB_TIMEOUT,
+        request: getGithubTimeout(),
     });
 }
