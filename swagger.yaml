@@ -39,6 +39,9 @@ components:
     SuggestionApplyItemStatus:
       type: string
       enum: [PENDING, APPLIED, FAILED]
+    ApplyMethod:
+      type: string
+      enum: [AI, STATIC]
 
 security:
   - BearerAuth: []
@@ -605,7 +608,7 @@ paths:
                     projectId: 101
                     scanId: 501
                     userId: 1
-                    branchName: "codepilot/batch-fixes-501-1719581200000"
+                    branchName: "codepilot/fixes-from-scan-501"
                     prUrl: "https://github.com/org/sample-project/pull/43"
                     status: "PARTIAL"
                     error: null
@@ -618,12 +621,14 @@ paths:
                         suggestionId: 2001
                         status: "APPLIED"
                         error: null
+                        applyMethod: "STATIC"
                         suggestion: { id: 2001, summary: "Apply Parameterized Queries", issueId: 901 }
                       - id: 4002
                         suggestionsApplyId: 3001
                         suggestionId: 2002
                         status: "FAILED"
                         error: "Patch could not be applied cleanly"
+                        applyMethod: null
                         suggestion: { id: 2002, summary: "Use const instead of let", issueId: 902 }
                 pagination: { page: 1, limit: 20, total: 1 }
 
@@ -642,7 +647,7 @@ paths:
                   projectId: 101
                   scanId: 501
                   userId: 1
-                  branchName: "codepilot/batch-fixes-501-1719581200000"
+                  branchName: "codepilot/fixes-from-scan-501"
                   prUrl: "https://github.com/org/sample-project/pull/43"
                   status: "PARTIAL"
                   error: null
@@ -655,6 +660,7 @@ paths:
                       suggestionId: 2001
                       status: "APPLIED"
                       error: null
+                      applyMethod: "AI"
                       suggestion:
                         id: 2001
                         projectId: 101
@@ -670,6 +676,7 @@ paths:
                       suggestionId: 2002
                       status: "FAILED"
                       error: "Patch could not be applied cleanly"
+                      applyMethod: null
                       suggestion:
                         id: 2002
                         projectId: 101

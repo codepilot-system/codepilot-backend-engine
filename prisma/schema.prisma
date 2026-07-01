@@ -49,6 +49,11 @@ enum SuggestionsApplyItemStatus {
   FAILED
 }
 
+enum ApplyMethod {
+  AI
+  STATIC
+}
+
 enum Severity {
   LOW
   MEDIUM
@@ -242,6 +247,7 @@ model SuggestionsApplyItem {
   suggestionId      Int                   @map("suggestion_id")
   status            SuggestionsApplyItemStatus @default(PENDING)
   error             String?
+  applyMethod       ApplyMethod?          @map("apply_method")
 
   @@unique([suggestionsApplyId, suggestionId])
   @@index([suggestionId])

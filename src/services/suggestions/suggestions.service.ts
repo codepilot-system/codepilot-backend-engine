@@ -241,24 +241,26 @@ async function processSingleSuggestionsApply(applyId: number) {
     if (currentContent === null) throw new Error(`Could not fetch file ${issue.filePath}`);
 
     // First try static patch
-    let patchedContent = tryApplyPatch(currentContent, sug.diffPatch);
-    
-    // If static patch fails, try AI
-    if (patchedContent === false) {
-      console.log(`[processSingleSuggestionsApply] Static patch failed, trying AI for suggestion ${sug.id}`);
-      const aiResult = await applyBulkFixes(
-        issue.filePath,
-        currentContent,
-        [{ id: sug.id, diffPatch: sug.diffPatch, summary: sug.summary }]
-      );
+        let patchedContent = tryApplyPatch(currentContent, sug.diffPatch);
+        let applyMethod: 'AI' | 'STATIC' = 'STATIC';
+        
+        // If static patch fails, try AI
+        if (patchedContent === false) {
+          console.log(`[processSingleSuggestionsApply] Static patch failed, trying AI for suggestion ${sug.id}`);
+          const aiResult = await applyBulkFixes(
+            issue.filePath,
+            currentContent,
+            [{ id: sug.id, diffPatch: sug.diffPatch, summary: sug.summary }]
+          );
 
-      if (aiResult.modifiedFile && aiResult.appliedSuggestionIds.includes(sug.id)) {
-        patchedContent = aiResult.modifiedFile;
-        console.log(`[processSingleSuggestionsApply] AI succeeded for suggestion ${sug.id}`);
-      } else {
-        throw new Error(`Patch could not be applied (static and AI both failed for ${issue.filePath}`);
-      }
-    }
+          if (aiResult.modifiedFile && aiResult.appliedSuggestionIds.includes(sug.id)) {
+            patchedContent = aiResult.modifiedFile;
+            applyMethod = 'AI';
+            console.log(`[processSingleSuggestionsApply] AI succeeded for suggestion ${sug.id}`);
+          } else {
+            throw new Error(`Patch could not be applied (static and AI both failed for ${issue.filePath}`);
+          }
+        }
 
     if (!(await isApplyStillInProgress(applyId))) {
       console.log(`[processSingleSuggestionsApply] Stopping applyId ${applyId} before GitHub write because it is no longer active`);
@@ -313,7 +315,8 @@ async function processSingleSuggestionsApply(applyId: number) {
       await tx.suggestionsApplyItem.update({
         where: { id: applyItem.id },
         data: {
-          status: SuggestionsApplyItemStatus.APPLIED
+          status: SuggestionsApplyItemStatus.APPLIED,
+          applyMethod
         }
       });
 
@@ -436,7 +439,7 @@ async function processBulkSuggestionsApply(applyId: number) {
     }
 
     const fileContents: Record<string, string> = {};
-    const succeededApplyItems: typeof applyItems = [];
+    const succeededApplyItems: Array<{ item: typeof applyItems[0]; applyMethod: 'AI' | 'STATIC' }> = [];
     const failedApplyItems: Array<{ item: typeof applyItems[0]; error: string }> = [];
 
     for (const [filePath, itemsForFile] of Object.entries(suggestionsByFile)) {
@@ -467,7 +470,7 @@ async function processBulkSuggestionsApply(applyId: number) {
           const appliedIds = new Set(aiResult.appliedSuggestionIds);
           for (const { applyItem, suggestion } of itemsForFile) {
             if (appliedIds.has(suggestion.id)) {
-              succeededApplyItems.push(applyItem);
+              succeededApplyItems.push({ item: applyItem, applyMethod: 'AI' });
             } else {
               const fail = aiResult.failedSuggestions.find(f => f.id === suggestion.id);
               failedApplyItems.push({
@@ -484,7 +487,7 @@ async function processBulkSuggestionsApply(applyId: number) {
           const appliedIds = new Set(fallbackResult.appliedItems.map(i => i.id));
           for (const { applyItem, suggestion } of itemsForFile) {
             if (appliedIds.has(suggestion.id)) {
-              succeededApplyItems.push(applyItem);
+              succeededApplyItems.push({ item: applyItem, applyMethod: 'STATIC' });
             } else {
               const fail = fallbackResult.failedItems.find(f => f.id === suggestion.id);
               failedApplyItems.push({
@@ -518,7 +521,7 @@ async function processBulkSuggestionsApply(applyId: number) {
 
       const desiredBranch = `codepilot/fixes-from-scan-${scanId}`;
       const octokit = await getInstallationOctokit(installationId);
-      const succeededSuggestions = succeededApplyItems.map(item => item.suggestion);
+      const succeededSuggestions = succeededApplyItems.map(({ item }) => item.suggestion);
       const prTitle = `[CodePilot] Batch Fixes for Scan ${scanId}`;
       const prBody = `## CodePilot Auto-Fixes
 
@@ -535,7 +538,7 @@ ${succeededSuggestions.map(s => `- ${s.issue.summary}`).join('\n')}
       finalStatus = succeededApplyItems.length === applyItems.length ? SuggestionsApplyStatus.COMPLETED : SuggestionsApplyStatus.PARTIAL;
     }
 
-    const succeededIds = succeededApplyItems.map(item => item.suggestion.id);
+    const succeededIds = succeededApplyItems.map(({ item }) => item.suggestion.id);
 
     const finalized = await prisma.$transaction(async tx => {
       const activeApply = await tx.suggestionsApply.count({
@@ -556,11 +559,12 @@ ${succeededSuggestions.map(s => `- ${s.issue.summary}`).join('\n')}
         });
       }
 
-      for (const item of succeededApplyItems) {
+      for (const { item, applyMethod } of succeededApplyItems) {
         await tx.suggestionsApplyItem.update({
           where: { id: item.id },
           data: {
-            status: SuggestionsApplyItemStatus.APPLIED
+            status: SuggestionsApplyItemStatus.APPLIED,
+            applyMethod
           }
         });
       }
@@ -1020,6 +1024,7 @@ export const getSuggestionsApplies = async (
         suggestionId: item.suggestionId,
         status: item.status,
         error: item.error,
+        applyMethod: item.applyMethod,
         suggestion: item.suggestion
       }))
     };
@@ -1052,6 +1057,7 @@ export const getSuggestionsApplyById = async (userId: number, applyId: number) =
       suggestionId: item.suggestionId,
       status: item.status,
       error: item.error,
+      applyMethod: item.applyMethod,
       suggestion: item.suggestion
     }))
   };
