@@ -6,6 +6,7 @@ import app from './app';
 import { ENV } from './config/env.config';
 
 import './jobs/session-cleanup.job';
+import './jobs/suggestion-apply-cleanup.job';
 
 dns.setDefaultResultOrder('ipv4first');
 
