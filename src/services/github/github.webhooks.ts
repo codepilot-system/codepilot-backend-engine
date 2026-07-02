@@ -128,6 +128,6 @@ export const handleGithubWebhook = async (req: any, res: any) => {
 
         if (error instanceof AggregateError)
             res.status(500).json({ error: 'Webhook processing failed' });
-        else res.status(200).json({ error: 'Webhook verification failed' });
+        else res.status(400).json({ error: 'Webhook verification failed' });
     }
 };
