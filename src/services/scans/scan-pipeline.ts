@@ -69,12 +69,6 @@ export async function runRepoScanPipeline(scanId: number): Promise<void> {
         );
 
 
-        if (analyzerOutput.findings.length > 0) {
-            const analyzerIssueInputs = mapAnalyzerFindingsToIssueInputs(analyzerOutput);
-            await createIssues(analyzerIssueInputs, scanId, project.id);
-            console.log(`[ScanPipeline] Persisted ${analyzerIssueInputs.length} ANALYZER issue(s)`);
-        }
-
         const codeFiles = files.map((f) => ({
             filePath: f.filePath,
             content: f.content,
@@ -117,6 +111,24 @@ export async function runRepoScanPipeline(scanId: number): Promise<void> {
             orderBy: { id: 'asc' },
         });
 
+        let persistedAnalyzerCount = 0;
+        if (analyzerOutput.findings.length > 0) {
+            let analyzerIssueInputs = mapAnalyzerFindingsToIssueInputs(analyzerOutput);
+            
+            // Filter out analyzer issues that are duplicates of AI issues (same filePath + lineNumber + category)
+            const aiIssueKeys = new Set(savedAiIssues.map(issue => `${issue.filePath}|${issue.lineNumber}|${issue.category}`));
+            analyzerIssueInputs = analyzerIssueInputs.filter(issue => {
+                const key = `${issue.filePath}|${issue.lineNumber}|${issue.category}`;
+                return !aiIssueKeys.has(key);
+            });
+
+            if (analyzerIssueInputs.length > 0) {
+                await createIssues(analyzerIssueInputs, scanId, project.id);
+                persistedAnalyzerCount = analyzerIssueInputs.length;
+                console.log(`[ScanPipeline] Persisted ${persistedAnalyzerCount} ANALYZER issue(s)`);
+            }
+        }
+
         const suggestionsToCreate = aiResult.issues
             .map((issue, idx) => {
                 const matchingIssue = savedAiIssues[idx];
@@ -138,7 +150,7 @@ export async function runRepoScanPipeline(scanId: number): Promise<void> {
         }
 
 
-        const totalIssueCount = analyzerOutput.findings.length + aiResult.issues.length;
+        const totalIssueCount = persistedAnalyzerCount + aiResult.issues.length;
         if (totalIssueCount > 0) {
             await calculateAndSaveAnalytics(scanId, project.id);
         } else {
