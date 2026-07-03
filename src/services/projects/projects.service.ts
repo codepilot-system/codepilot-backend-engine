@@ -84,7 +84,7 @@ export const connectProject = async (userId: number, owner: string, repoName: st
         role
     });
 
-    if (!isNewMember) throw new ApiError('You are already connected to this project', 400);
+   // if (!isNewMember) throw new ApiError('You are already connected to this project', 400);
 
     return project;
 };
