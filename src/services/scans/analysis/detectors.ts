@@ -3,9 +3,9 @@ import { LanguageRules, RawFinding, FunctionRecord } from './types';
 import { CONCERN_PATTERNS } from './patterns';
 import { buildFingerprint, hashFingerprint } from './fingerprints';
 
-const NESTING_THRESHOLD = 4;           // was 5 — try_statement removed so this is equivalent
-const SRP_CONCERN_THRESHOLD = 3;       // raised from 2; logging alone shouldn't trigger SRP
-const LONG_FUNCTION_THRESHOLD = 150;   // raised from 50 — 50 lines is normal
+const NESTING_THRESHOLD = 4;
+const SRP_CONCERN_THRESHOLD = 3;
+const LONG_FUNCTION_THRESHOLD = 150;
 const MIN_LINES_FOR_DUPLICATE = 4;
 
 const LOGICAL_OPERATORS = new Set(['&&', '||', '??', 'and', 'or']);
@@ -17,13 +17,11 @@ export function computeCyclomaticComplexity(
 ): number {
     let count = 0;
 
-    // Don't descend into nested function definitions (they own their CC)
     if (!isRoot && rules.functionNodes.includes(node.type)) {
         return 0;
     }
 
     if (rules.ccNodes.includes(node.type)) {
-        // For Java binary_expression, only count logical operators (&& / ||)
         if (node.type === 'binary_expression') {
             const operator = node.childForFieldName('operator')?.text ?? '';
             if (LOGICAL_OPERATORS.has(operator)) count++;
@@ -39,14 +37,9 @@ export function computeCyclomaticComplexity(
     return count;
 }
 
-// ----------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------
 
 export function getFunctionName(node: Parser.SyntaxNode): string {
     const nameNode = node.childForFieldName('name');
-    // For anonymous functions, use position as a unique identifier so the
-    // reported Set in detectDeepNesting doesn't deduplicate them incorrectly
     return nameNode ? nameNode.text : `anonymous@${node.startPosition.row + 1}`;
 }
 
@@ -60,9 +53,6 @@ function extractCalls(node: Parser.SyntaxNode, rules: LanguageRules, calls: stri
     return calls;
 }
 
-// ----------------------------------------------------------------
-// Detectors
-// ----------------------------------------------------------------
 
 export function detectLongFunctions(
     node: Parser.SyntaxNode,
@@ -100,19 +90,17 @@ export function detectDeepNesting(
     raw: RawFinding[],
     depth: number = 0,
     functionName: string = '',
-    reported: Set<string> = new Set(),  // still per-tree-walk but now keyed by unique name
+    reported: Set<string> = new Set(),
     fnStart: number = 0,
     fnEnd: number = 0,
     fnNode: Parser.SyntaxNode | null = null
 ) {
     if (rules.functionNodes.includes(node.type)) {
-        functionName = getFunctionName(node);  // now includes position for anonymous functions
+        functionName = getFunctionName(node);
         fnStart = node.startPosition.row + 1;
         fnEnd = node.endPosition.row + 1;
         fnNode = node;
         depth = 0;
-        // Reset reported per function so nested anonymous functions are
-        // each evaluated independently
         reported = new Set();
     }
 
@@ -167,8 +155,7 @@ export function detectSRPViolations(
                 signals: { concerns: detectedConcerns, concernCount: detectedConcerns.length, threshold: SRP_CONCERN_THRESHOLD, cc },
             });
         } else {
-            // Fallback heuristic for unrecognized patterns — tightened thresholds
-            // to reduce noise on normal service functions
+
             const lineCount = endLine - startLine + 1;
             const uniqueCallers = new Set(
                 calls.map(c => c.split('(')[0].split('.')[0].trim())
@@ -222,8 +209,7 @@ export function detectHighComplexity(
             let confidence: number;
             if (cc >= 21) confidence = 0.92;
             else if (cc >= 16) confidence = 0.78;
-            else confidence = 0.60;   // 11–15
-
+            else confidence = 0.60;
             raw.push({
                 filePath, functionName: name, startLine, endLine,
                 issueType: 'HIGH_COMPLEXITY',

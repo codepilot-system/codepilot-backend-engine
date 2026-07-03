@@ -10,9 +10,9 @@ export { LOCAL_MODELS, REPO_MODELS, getModelStatuses } from './ai.limiter';
 const groqClient = new Groq({ apiKey: ENV.GROQ_API_KEY });
 // Models that support chain-of-thought reasoning; we hide it to only get the final JSON output
 const REASONING_MODELS = new Set([
-  'openai/gpt-oss-20b',
-  'qwen/qwen3-32b',
-  'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3-32b',
+    'openai/gpt-oss-120b',
 ]);
 
 const SYSTEM_PROMPT = `You are an expert code reviewer. You MUST return ONLY valid JSON matching this exact structure, with no extra text or markdown:
@@ -74,198 +74,199 @@ You MUST return a JSON object with two fields:
 
 
 function parseAnalysisIssues(rawText: string): ScanIssue[] {
-  try {
-    const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    try {
+        const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
 
-    let jsonString = markdownMatch ? markdownMatch[1] : rawText;
+        let jsonString = markdownMatch ? markdownMatch[1] : rawText;
 
-    jsonString = jsonString.trim();
+        jsonString = jsonString.trim();
 
-    if (!jsonString.startsWith('{') && !jsonString.startsWith('[')) {
-      const startIndex = Math.min(
-        jsonString.indexOf('{') !== -1 ? jsonString.indexOf('{') : Infinity,
-        jsonString.indexOf('[') !== -1 ? jsonString.indexOf('[') : Infinity
-      );
-      const endIndex = Math.max(jsonString.lastIndexOf('}'), jsonString.lastIndexOf(']'));
+        if (!jsonString.startsWith('{') && !jsonString.startsWith('[')) {
+            const startIndex = Math.min(
+                jsonString.indexOf('{') !== -1 ? jsonString.indexOf('{') : Infinity,
+                jsonString.indexOf('[') !== -1 ? jsonString.indexOf('[') : Infinity
+            );
+            const endIndex = Math.max(jsonString.lastIndexOf('}'), jsonString.lastIndexOf(']'));
 
-      if (startIndex !== Infinity && endIndex !== -1)
-        jsonString = jsonString.substring(startIndex, endIndex + 1);
+            if (startIndex !== Infinity && endIndex !== -1)
+                jsonString = jsonString.substring(startIndex, endIndex + 1);
+        }
+
+        const parsed = JSON.parse(jsonString) as { issues?: unknown[] };
+        const rawIssues = Array.isArray(parsed.issues) ? parsed.issues : [];
+
+        return rawIssues.map((raw) => {
+            const item = raw as Record<string, unknown>;
+            return {
+                filePath: String(item.filePath ?? item.filename ?? 'unknown'),
+                severity: String(item.severity ?? 'MEDIUM') as ScanIssue['severity'],
+                category: String(item.category ?? 'OTHER') as ScanIssue['category'],
+                summary: String(item.summary ?? 'Issue detected'),
+                explanation: String(item.explanation ?? ''),
+                source: "AI",
+                codeSnippet: String(item.affectedCodeSnippet ?? item.codeSnippet ?? ''),
+                diffPatch: String(item.suggestedFixDiff ?? item.diffPatch ?? ''),
+                suggestedFixSummary: String(item.suggestedFixSummary ?? item.fixSummary ?? item.summary ?? 'Apply fix'),
+                lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : undefined,
+            };
+        });
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Invalid JSON output from model: ${detail}`);
     }
-
-    const parsed = JSON.parse(jsonString) as { issues?: unknown[] };
-    const rawIssues = Array.isArray(parsed.issues) ? parsed.issues : [];
-
-    return rawIssues.map((raw) => {
-      const item = raw as Record<string, unknown>;
-      return {
-        filePath: String(item.filePath ?? item.filename ?? 'unknown'),
-        severity: String(item.severity ?? 'MEDIUM') as ScanIssue['severity'],
-        category: String(item.category ?? 'OTHER') as ScanIssue['category'],
-        summary: String(item.summary ?? 'Issue detected'),
-        explanation: String(item.explanation ?? ''),
-        codeSnippet: String(item.affectedCodeSnippet ?? item.codeSnippet ?? ''),
-        diffPatch: String(item.suggestedFixDiff ?? item.diffPatch ?? ''),
-        suggestedFixSummary: String(item.suggestedFixSummary ?? item.fixSummary ?? item.summary ?? 'Apply fix'),
-        lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : undefined,
-      };
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid JSON output from model: ${detail}`);
-  }
 }
 
 async function runAnalysis(
-  scanType: ScanType,
-  files: CodeFile[],
-  entityId: string,
-  preferredModel?: string,
-  projectSummary?: string,
-  importedContext?: ImportedFileSkeleton[],
-  folderTree?: string,
-  dependencies?: string,
+    scanType: ScanType,
+    files: CodeFile[],
+    entityId: string,
+    preferredModel?: string,
+    projectSummary?: string,
+    importedContext?: ImportedFileSkeleton[],
+    folderTree?: string,
+    dependencies?: string,
 ): Promise<AnalysisResult> {
-  if (!files.length) throw new ApiError('At least one file is required for analysis', 400);
+    if (!files.length) throw new ApiError('At least one file is required for analysis', 400);
 
-  const entityType = scanType === 'local' ? 'user' : 'project';
+    const entityType = scanType === 'local' ? 'user' : 'project';
 
-  if (preferredModel) {
-    const allowed = scanType === 'repo' ? REPO_MODELS : LOCAL_MODELS;
-    if (!(allowed as readonly string[]).includes(preferredModel))
-      throw new ApiError(`Unsupported model. Choose from: ${allowed.join(', ')}`, 400);
-  }
-
-  const fileBlocks = files.map((f) => {
-    if (f.selectedLines && f.selectedLines.length > 0) {
-      const lines = f.content.split('\n');
-      // Reverse-sort so splice insertions don't shift indices of earlier hunks
-      const sortedHunks = [...f.selectedLines].sort((a, b) => b.start - a.start);
-      for (const hunk of sortedHunks) {
-        lines.splice(hunk.end, 0, `</snippet-to-analyze>`);
-        lines.splice(Math.max(0, hunk.start - 1), 0, `<snippet-to-analyze>`);
-      }
-      return `<file path="${f.filePath}">\n${lines.join('\n')}\n</file>`;
-    }
-    return `<file path="${f.filePath}">\n${f.content}\n</file>`;
-  }).join('\n\n');
-
-  let prompt = `Analyze the following codebase for security vulnerabilities, bugs, cross-file issues, namings, and best practice violations.`;
-  if (files.some(f => f.selectedLines && f.selectedLines.length > 0))
-    prompt += `\nNOTE: You will see <snippet-to-analyze> tags marking recent modifications. Your primary focus is reviewing the code inside these tags. However, you MUST ALSO report any issues OUTSIDE the tags if they are a direct consequence of these modifications (e.g., changing a function signature that breaks a caller, or leaving an unused variable). Use the rest of the file context to identify these cascading issues.`;
-  if (projectSummary) prompt += `\n\nProject Architecture Context (Use this to understand global conventions):\n${projectSummary}`;
-  if (folderTree) prompt += `\n\nProject Folder Structure:\n${folderTree}`;
-  if (dependencies) prompt += `\n\nInstalled Dependencies:\n${dependencies}`;
-  if (importedContext?.length) {
-    const contextBlocks = importedContext
-      .map((ctx) => `<imported-context path="${ctx.filePath}">\n${ctx.skeleton}\n</imported-context>`)
-      .join('\n\n');
-    prompt += `\n\nDirect Dependencies (exported signatures of files imported by the analyzed code — use for cross-file type checking):\n${contextBlocks}`;
-  }
-  prompt += `\n\nCode to analyze:\n${fileBlocks}`;
-
-  // Conservative estimate: code averages ~3.2 chars/token (denser than English prose at ~4 chars/token)
-  const inputTokens = Math.ceil((SYSTEM_PROMPT.length + prompt.length) / 3.2);
-  const maxOutput = scanType === 'repo' ? 4000 : 1500;
-  let lastError: unknown = null;
-
-  let models = [...MODELS_BY_SCAN_TYPE[scanType]];
-  if (preferredModel) models = [preferredModel, ...models.filter(m => m !== preferredModel)];
-
-  for (const model of models) {
-    const cb = await getCircuitBreakerStatus(model);
-    if (cb) {
-      lastError = new ApiError(`Model ${model} is currently unavailable (${cb})`, 503);
-      continue;
+    if (preferredModel) {
+        const allowed = scanType === 'repo' ? REPO_MODELS : LOCAL_MODELS;
+        if (!(allowed as readonly string[]).includes(preferredModel))
+            throw new ApiError(`Unsupported model. Choose from: ${allowed.join(', ')}`, 400);
     }
 
-    if (inputTokens + maxOutput > MODEL_TOKEN_LIMITS[model]) {
-      lastError = new ApiError(`Payload too large for model ${model}`, 413);
-      continue;
+    const fileBlocks = files.map((f) => {
+        if (f.selectedLines && f.selectedLines.length > 0) {
+            const lines = f.content.split('\n');
+            // Reverse-sort so splice insertions don't shift indices of earlier hunks
+            const sortedHunks = [...f.selectedLines].sort((a, b) => b.start - a.start);
+            for (const hunk of sortedHunks) {
+                lines.splice(hunk.end, 0, `</snippet-to-analyze>`);
+                lines.splice(Math.max(0, hunk.start - 1), 0, `<snippet-to-analyze>`);
+            }
+            return `<file path="${f.filePath}">\n${lines.join('\n')}\n</file>`;
+        }
+        return `<file path="${f.filePath}">\n${f.content}\n</file>`;
+    }).join('\n\n');
+
+    let prompt = `Analyze the following codebase for security vulnerabilities, bugs, cross-file issues, namings, and best practice violations.`;
+    if (files.some(f => f.selectedLines && f.selectedLines.length > 0))
+        prompt += `\nNOTE: You will see <snippet-to-analyze> tags marking recent modifications. Your primary focus is reviewing the code inside these tags. However, you MUST ALSO report any issues OUTSIDE the tags if they are a direct consequence of these modifications (e.g., changing a function signature that breaks a caller, or leaving an unused variable). Use the rest of the file context to identify these cascading issues.`;
+    if (projectSummary) prompt += `\n\nProject Architecture Context (Use this to understand global conventions):\n${projectSummary}`;
+    if (folderTree) prompt += `\n\nProject Folder Structure:\n${folderTree}`;
+    if (dependencies) prompt += `\n\nInstalled Dependencies:\n${dependencies}`;
+    if (importedContext?.length) {
+        const contextBlocks = importedContext
+            .map((ctx) => `<imported-context path="${ctx.filePath}">\n${ctx.skeleton}\n</imported-context>`)
+            .join('\n\n');
+        prompt += `\n\nDirect Dependencies (exported signatures of files imported by the analyzed code — use for cross-file type checking):\n${contextBlocks}`;
+    }
+    prompt += `\n\nCode to analyze:\n${fileBlocks}`;
+
+    // Conservative estimate: code averages ~3.2 chars/token (denser than English prose at ~4 chars/token)
+    const inputTokens = Math.ceil((SYSTEM_PROMPT.length + prompt.length) / 3.2);
+    const maxOutput = scanType === 'repo' ? 4000 : 1500;
+    let lastError: unknown = null;
+
+    let models = [...MODELS_BY_SCAN_TYPE[scanType]];
+    if (preferredModel) models = [preferredModel, ...models.filter(m => m !== preferredModel)];
+
+    for (const model of models) {
+        const cb = await getCircuitBreakerStatus(model);
+        if (cb) {
+            lastError = new ApiError(`Model ${model} is currently unavailable (${cb})`, 503);
+            continue;
+        }
+
+        if (inputTokens + maxOutput > MODEL_TOKEN_LIMITS[model]) {
+            lastError = new ApiError(`Payload too large for model ${model}`, 413);
+            continue;
+        }
+
+        const hasQuota = await checkDailyQuota(entityId, entityType, model, inputTokens + maxOutput);
+        if (!hasQuota) {
+            lastError = new ApiError(`Quota exceeded for model ${model}`, 429);
+            continue;
+        }
+
+        try {
+            const startTime = Date.now();
+            const response = await groqClient.chat.completions.create({
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: prompt },
+                ],
+                model,
+                temperature: 0.1,
+                response_format: { type: 'json_object' },
+                max_tokens: maxOutput,
+                ...(REASONING_MODELS.has(model) && { reasoning_format: 'hidden' }),
+            } as any) as any;
+
+            const rawText = response.choices[0]?.message?.content ?? '';
+            if (!rawText) {
+                lastError = new ApiError('Model returned an empty response', 503);
+                continue;
+            }
+
+            let issues: ScanIssue[];
+            try {
+                issues = parseAnalysisIssues(rawText);
+            } catch (parseError) {
+                lastError = parseError;
+                continue;
+            }
+
+            const tokensUsed = response.usage?.total_tokens ?? 0;
+            const durationMs = Date.now() - startTime;
+
+            await recordDailyQuota(entityId, entityType, model, tokensUsed);
+            return { issues, modelUsed: model, tokensUsed, durationMs };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            lastError = error;
+            await tripCircuitBreaker(model, error);
+        }
     }
 
-    const hasQuota = await checkDailyQuota(entityId, entityType, model, inputTokens + maxOutput);
-    if (!hasQuota) {
-      lastError = new ApiError(`Quota exceeded for model ${model}`, 429);
-      continue;
-    }
-
-    try {
-      const startTime = Date.now();
-      const response = await groqClient.chat.completions.create({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        model,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-        max_tokens: maxOutput,
-        ...(REASONING_MODELS.has(model) && { reasoning_format: 'hidden' }),
-      } as any) as any;
-
-      const rawText = response.choices[0]?.message?.content ?? '';
-      if (!rawText) {
-        lastError = new ApiError('Model returned an empty response', 503);
-        continue;
-      }
-
-      let issues: ScanIssue[];
-      try {
-        issues = parseAnalysisIssues(rawText);
-      } catch (parseError) {
-        lastError = parseError;
-        continue;
-      }
-
-      const tokensUsed = response.usage?.total_tokens ?? 0;
-      const durationMs = Date.now() - startTime;
-
-      await recordDailyQuota(entityId, entityType, model, tokensUsed);
-      return { issues, modelUsed: model, tokensUsed, durationMs };
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      lastError = error;
-      await tripCircuitBreaker(model, error);
-    }
-  }
-
-  throw lastError instanceof ApiError
-    ? lastError
-    : new ApiError('All AI models are currently overwhelmed or out of quota. Please try again later.', 503);
+    throw lastError instanceof ApiError
+        ? lastError
+        : new ApiError('All AI models are currently overwhelmed or out of quota. Please try again later.', 503);
 }
 
 export function analyzeLocalScan(files: CodeFile[], userId: string, preferredModel?: string, projectBrief?: string): Promise<AnalysisResult> {
-  if (!userId) throw new ApiError('A valid user ID is required to perform a local scan.', 400);
-  return runAnalysis('local', files, userId, preferredModel, projectBrief);
+    if (!userId) throw new ApiError('A valid user ID is required to perform a local scan.', 400);
+    return runAnalysis('local', files, userId, preferredModel, projectBrief);
 }
 
 export function analyzeRepoScan(files: CodeFile[], projectId: string, preferredModel?: string, projectSummary?: string, importedContext?: ImportedFileSkeleton[], folderTree?: string, dependencies?: string)
-  : Promise<AnalysisResult> {
-  if (!projectId) throw new ApiError('A valid project ID is required to perform a repo scan.', 400);
-  return runAnalysis('repo', files, projectId, preferredModel, projectSummary, importedContext, folderTree, dependencies);
+    : Promise<AnalysisResult> {
+    if (!projectId) throw new ApiError('A valid project ID is required to perform a repo scan.', 400);
+    return runAnalysis('repo', files, projectId, preferredModel, projectSummary, importedContext, folderTree, dependencies);
 }
 
 export async function applyBulkFixes(
-  filePath: string,
-  originalContent: string,
-  suggestions: Array<{ id: number; diffPatch: string; summary: string }>,
-  preferredModel?: string,
+    filePath: string,
+    originalContent: string,
+    suggestions: Array<{ id: number; diffPatch: string; summary: string }>,
+    preferredModel?: string,
 ): Promise<{
-  modifiedFile?: string;
-  appliedSuggestionIds: number[];
-  failedSuggestions: Array<{ id: number; reason: string }>;
-  modelUsed: string;
-  tokensUsed: number;
+    modifiedFile?: string;
+    appliedSuggestionIds: number[];
+    failedSuggestions: Array<{ id: number; reason: string }>;
+    modelUsed: string;
+    tokensUsed: number;
 }> {
-  let models = [...MODELS_BY_SCAN_TYPE.repo];
-  if (preferredModel) models = [preferredModel, ...models.filter(m => m !== preferredModel)];
+    let models = [...MODELS_BY_SCAN_TYPE.repo];
+    if (preferredModel) models = [preferredModel, ...models.filter(m => m !== preferredModel)];
 
-  const suggestionsBlock = suggestions.map((s) => `Suggestion ID: ${s.id}
+    const suggestionsBlock = suggestions.map((s) => `Suggestion ID: ${s.id}
 Summary: ${s.summary}
 Diff Patch:
 ${s.diffPatch}`).join('\n\n---\n\n');
 
-  const prompt = `Original file (${filePath}):
+    const prompt = `Original file (${filePath}):
 \`\`\`
 ${originalContent}
 \`\`\`
@@ -275,127 +276,127 @@ ${suggestionsBlock}
 
 Please apply as many suggestions as possible and return the full modified file along with which suggestions were applied and which failed.`;
 
-  const inputTokens = Math.ceil((BULK_FIX_SYSTEM_PROMPT.length + prompt.length) / 3.2);
-  const maxOutput = 8000;
+    const inputTokens = Math.ceil((BULK_FIX_SYSTEM_PROMPT.length + prompt.length) / 3.2);
+    const maxOutput = 8000;
 
-  for (const model of models) {
-    const cb = await getCircuitBreakerStatus(model);
-    if (cb) continue;
-    if (inputTokens + maxOutput > MODEL_TOKEN_LIMITS[model]) continue;
+    for (const model of models) {
+        const cb = await getCircuitBreakerStatus(model);
+        if (cb) continue;
+        if (inputTokens + maxOutput > MODEL_TOKEN_LIMITS[model]) continue;
 
-    console.log("[AI Prompt] Applying bulk fixes with model:", model);
-    console.log(prompt);
-    console.log("----------------------------------------------------------------------");
-    try {
-      const response = await groqClient.chat.completions.create({
-        messages: [
-          { role: 'system', content: BULK_FIX_SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        model,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-        max_tokens: maxOutput,
-        ...(REASONING_MODELS.has(model) && { reasoning_format: 'hidden' }),
-      } as any);
-      console.log("[AI Response] Bulk fixes applied with model:", model);
-      console.log(response);
-      console.log("AI message:\n", response.choices[0]?.message?.content);
-      console.log("----------------------------------------------------------------------");
+        console.log("[AI Prompt] Applying bulk fixes with model:", model);
+        console.log(prompt);
+        console.log("----------------------------------------------------------------------");
+        try {
+            const response = await groqClient.chat.completions.create({
+                messages: [
+                    { role: 'system', content: BULK_FIX_SYSTEM_PROMPT },
+                    { role: 'user', content: prompt },
+                ],
+                model,
+                temperature: 0.1,
+                response_format: { type: 'json_object' },
+                max_tokens: maxOutput,
+                ...(REASONING_MODELS.has(model) && { reasoning_format: 'hidden' }),
+            } as any);
+            console.log("[AI Response] Bulk fixes applied with model:", model);
+            console.log(response);
+            console.log("AI message:\n", response.choices[0]?.message?.content);
+            console.log("----------------------------------------------------------------------");
 
-      const rawText = response.choices[0]?.message?.content ?? '';
-      if (!rawText) continue;
+            const rawText = response.choices[0]?.message?.content ?? '';
+            if (!rawText) continue;
 
-      let jsonString = rawText;
-      const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (markdownMatch) jsonString = markdownMatch[1];
-      jsonString = jsonString.trim();
+            let jsonString = rawText;
+            const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (markdownMatch) jsonString = markdownMatch[1];
+            jsonString = jsonString.trim();
 
-      const parsed = JSON.parse(jsonString) as {
-        modifiedFile?: string;
-        appliedSuggestionIds?: (number | string)[];
-        failedSuggestions?: Array<{ id: number | string; reason: string }>;
-      };
+            const parsed = JSON.parse(jsonString) as {
+                modifiedFile?: string;
+                appliedSuggestionIds?: (number | string)[];
+                failedSuggestions?: Array<{ id: number | string; reason: string }>;
+            };
 
-      return {
-        modifiedFile: parsed.modifiedFile,
-        appliedSuggestionIds: (parsed.appliedSuggestionIds ?? []).map(id => Number(id)),
-        failedSuggestions: (parsed.failedSuggestions ?? []).map(s => ({ id: Number(s.id), reason: s.reason })),
-        modelUsed: model,
-        tokensUsed: response.usage?.total_tokens ?? 0,
-      };
-    } catch (error) {
-      console.error(`Error applying bulk fixes with model ${model}:`, error);
-      await tripCircuitBreaker(model, error);
-      continue;
+            return {
+                modifiedFile: parsed.modifiedFile,
+                appliedSuggestionIds: (parsed.appliedSuggestionIds ?? []).map(id => Number(id)),
+                failedSuggestions: (parsed.failedSuggestions ?? []).map(s => ({ id: Number(s.id), reason: s.reason })),
+                modelUsed: model,
+                tokensUsed: response.usage?.total_tokens ?? 0,
+            };
+        } catch (error) {
+            console.error(`Error applying bulk fixes with model ${model}:`, error);
+            await tripCircuitBreaker(model, error);
+            continue;
+        }
     }
-  }
 
-  return {
-    appliedSuggestionIds: [],
-    failedSuggestions: suggestions.map(s => ({ id: s.id, reason: 'All AI models failed to apply fixes' })),
-    modelUsed: '',
-    tokensUsed: 0,
-  };
+    return {
+        appliedSuggestionIds: [],
+        failedSuggestions: suggestions.map(s => ({ id: s.id, reason: 'All AI models failed to apply fixes' })),
+        modelUsed: '',
+        tokensUsed: 0,
+    };
 }
 
 export async function generateProjectSummary(files: CodeFile[], folderTree?: string, dependencies?: string): Promise<{ summary: string; brief: string; modelUsed: string; tokensUsed: number; durationMs: number }> {
-  if (!files.length) throw new ApiError('At least one file is required for summarization', 400);
+    if (!files.length) throw new ApiError('At least one file is required for summarization', 400);
 
-  const model = SUMMARY_MODEL;
+    const model = SUMMARY_MODEL;
 
-  const cb = await getCircuitBreakerStatus(model);
-  if (cb) {
-    const cooldown = COOLDOWN_MESSAGES[cb === 'daily' ? 'daily' : 'minute'];
-    throw new ApiError(`The summary model is ${cooldown}.`, 503);
-  }
-
-  const fileBlocks = files.map((f) => `<file path="${f.filePath}">\n${f.content}\n</file>`).join('\n\n');
-  let prompt = `Generate a project architecture summary based on the following context.`;
-  if (folderTree) prompt += `\n\nProject Folder Structure:\n${folderTree}`;
-  if (dependencies) prompt += `\n\nInstalled Dependencies:\n${dependencies}`;
-  prompt += `\n\nKey Files:\n${fileBlocks}`;
-
-  const maxOutput = 2000;
-
-  try {
-    const startTime = Date.now();
-    const response = await groqClient.chat.completions.create({
-      messages: [
-        { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
-      model,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      max_tokens: maxOutput,
-    });
-
-    const rawText = response.choices[0]?.message?.content ?? '';
-    if (!rawText) throw new ApiError('Summary model returned an empty response', 503);
-
-    let jsonString = rawText;
-    const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (markdownMatch) jsonString = markdownMatch[1];
-    jsonString = jsonString.trim();
-
-    let detailed = '';
-    let brief = '';
-    try {
-      const parsed = JSON.parse(jsonString) as { detailed?: string, brief?: string };
-      detailed = parsed.detailed ?? 'Failed to generate detailed summary.';
-      brief = parsed.brief ?? 'Failed to generate brief summary.';
-    } catch {
-      throw new ApiError('Invalid JSON format from summary model', 500);
+    const cb = await getCircuitBreakerStatus(model);
+    if (cb) {
+        const cooldown = COOLDOWN_MESSAGES[cb === 'daily' ? 'daily' : 'minute'];
+        throw new ApiError(`The summary model is ${cooldown}.`, 503);
     }
 
-    const tokensUsed = response.usage?.total_tokens ?? 0;
-    const durationMs = Date.now() - startTime;
+    const fileBlocks = files.map((f) => `<file path="${f.filePath}">\n${f.content}\n</file>`).join('\n\n');
+    let prompt = `Generate a project architecture summary based on the following context.`;
+    if (folderTree) prompt += `\n\nProject Folder Structure:\n${folderTree}`;
+    if (dependencies) prompt += `\n\nInstalled Dependencies:\n${dependencies}`;
+    prompt += `\n\nKey Files:\n${fileBlocks}`;
 
-    return { summary: detailed.trim(), brief: brief.trim(), modelUsed: model, tokensUsed, durationMs };
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    await tripCircuitBreaker(model, error);
-    throw new ApiError('Failed to generate project summary. Please try again later.', 503);
-  }
+    const maxOutput = 2000;
+
+    try {
+        const startTime = Date.now();
+        const response = await groqClient.chat.completions.create({
+            messages: [
+                { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+                { role: 'user', content: prompt },
+            ],
+            model,
+            temperature: 0.2,
+            response_format: { type: 'json_object' },
+            max_tokens: maxOutput,
+        });
+
+        const rawText = response.choices[0]?.message?.content ?? '';
+        if (!rawText) throw new ApiError('Summary model returned an empty response', 503);
+
+        let jsonString = rawText;
+        const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (markdownMatch) jsonString = markdownMatch[1];
+        jsonString = jsonString.trim();
+
+        let detailed = '';
+        let brief = '';
+        try {
+            const parsed = JSON.parse(jsonString) as { detailed?: string, brief?: string };
+            detailed = parsed.detailed ?? 'Failed to generate detailed summary.';
+            brief = parsed.brief ?? 'Failed to generate brief summary.';
+        } catch {
+            throw new ApiError('Invalid JSON format from summary model', 500);
+        }
+
+        const tokensUsed = response.usage?.total_tokens ?? 0;
+        const durationMs = Date.now() - startTime;
+
+        return { summary: detailed.trim(), brief: brief.trim(), modelUsed: model, tokensUsed, durationMs };
+    } catch (error) {
+        if (error instanceof ApiError) throw error;
+        await tripCircuitBreaker(model, error);
+        throw new ApiError('Failed to generate project summary. Please try again later.', 503);
+    }
 }

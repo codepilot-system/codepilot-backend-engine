@@ -2,7 +2,7 @@ import prisma from '../../lib/prisma';
 import { ApiError } from '../../lib/ApiError';
 import { ScanStatus } from '@prisma/client';
 import { analyzeLocalScan, CodeFile } from '../ai/ai.service';
-import { runRepoScanPipeline } from './scan-pipeline';
+import { mapAnalyzerFindingsToIssueInputs, runRepoScanPipeline } from './scan-pipeline';
 import { analyzeFileContents } from './analysis/analyzer';
 import { buildScanReportPdf } from './scan-report.pdf';
 
@@ -190,7 +190,7 @@ export const analyzeLocalCode = async (
         scanFiles.map((f) => ({ filePath: f.filePath, content: f.content })),
         'local'
     );
-
+    const analyzerIssues = mapAnalyzerFindingsToIssueInputs(analyzerOutput);
     const aiResult = await analyzeLocalScan(scanFiles, String(userId), preferredModel, projectBrief);
 
 
@@ -201,6 +201,7 @@ export const analyzeLocalCode = async (
         category: issue.category,
         summary: issue.summary,
         codeSnippet: issue.codeSnippet,
+        source: issue.source,
         suggestions: [{
             summary: issue.suggestedFixSummary,
             explanation: issue.explanation,
@@ -209,7 +210,7 @@ export const analyzeLocalCode = async (
     }));
 
     return {
-        issues,
+        issues: [...issues, ...analyzerIssues],
         modelUsed: aiResult.modelUsed,
         tokensUsed: aiResult.tokensUsed,
         durationMs: aiResult.durationMs,

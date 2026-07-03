@@ -185,7 +185,7 @@ export async function runRepoScanPipeline(scanId: number): Promise<void> {
     }
 }
 
-function mapAnalyzerFindingsToIssueInputs(
+export function mapAnalyzerFindingsToIssueInputs(
     analyzerOutput: AnalyzerOutput
 ): Parameters<typeof createIssues>[0] {
     const rows: Parameters<typeof createIssues>[0] = [];
