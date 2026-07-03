@@ -37,8 +37,7 @@ CRUCIAL INSTRUCTIONS FOR "suggestedFixDiff":
 2. Every line starting with "-" (removed lines) MUST be an EXACT copy of a line from the original file!
 3. Every line starting with "+" (added lines) MUST be the exact fixed version of that line!
 4. Include enough context lines (unmodified lines) to make the patch unambiguous!
-5. Format the diff correctly with @@ lines showing line numbers!
-6. If the fix requires restructuring code across multiple non-contiguous locations (e.g. extracting a function, renaming across many call sites, moving code between files) such that it cannot be expressed as a single coherent unified diff, set "suggestedFixDiff" to an empty string "" instead of a vague description. Still provide a clear "suggestedFixSummary" explaining what should be done manually.`;
+5. Format the diff correctly with @@ lines showing line numbers!`;
 
 const BULK_FIX_SYSTEM_PROMPT = `You are an expert code fixer. Your task is to apply as many of the suggested fixes as possible to the original file.
 
@@ -73,7 +72,7 @@ You MUST return a JSON object with two fields:
 }`;
 
 function isValidUnifiedDiff(patch: string): boolean {
-  return patch.includes('@@') && (patch.includes('---') || patch.includes('+++'));
+    return patch.includes('@@') && (patch.includes('---') || patch.includes('+++'));
 }
 
 function parseAnalysisIssues(rawText: string): ScanIssue[] {
@@ -98,25 +97,25 @@ function parseAnalysisIssues(rawText: string): ScanIssue[] {
         const parsed = JSON.parse(jsonString) as { issues?: unknown[] };
         const rawIssues = Array.isArray(parsed.issues) ? parsed.issues : [];
 
-    return rawIssues.map((raw) => {
-      const item = raw as Record<string, unknown>;
-      return {
-        filePath: String(item.filePath ?? item.filename ?? 'unknown'),
-        severity: String(item.severity ?? 'MEDIUM') as ScanIssue['severity'],
-        category: String(item.category ?? 'OTHER') as ScanIssue['category'],
-        summary: String(item.summary ?? 'Issue detected'),
-        source: "AI",
-        explanation: String(item.explanation ?? ''),
-        codeSnippet: String(item.affectedCodeSnippet ?? item.codeSnippet ?? ''),
-        diffPatch: String(item.suggestedFixDiff ?? item.diffPatch ?? ''),
-        suggestedFixSummary: String(item.suggestedFixSummary ?? item.fixSummary ?? item.summary ?? 'Apply fix'),
-        lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : undefined,
-      };
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid JSON output from model: ${detail}`);
-  }
+        return rawIssues.map((raw) => {
+            const item = raw as Record<string, unknown>;
+            return {
+                filePath: String(item.filePath ?? item.filename ?? 'unknown'),
+                severity: String(item.severity ?? 'MEDIUM') as ScanIssue['severity'],
+                category: String(item.category ?? 'OTHER') as ScanIssue['category'],
+                summary: String(item.summary ?? 'Issue detected'),
+                source: "AI",
+                explanation: String(item.explanation ?? ''),
+                codeSnippet: String(item.affectedCodeSnippet ?? item.codeSnippet ?? ''),
+                diffPatch: String(item.suggestedFixDiff ?? item.diffPatch ?? ''),
+                suggestedFixSummary: String(item.suggestedFixSummary ?? item.fixSummary ?? item.summary ?? 'Apply fix'),
+                lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : undefined,
+            };
+        });
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Invalid JSON output from model: ${detail}`);
+    }
 }
 
 async function runAnalysis(
@@ -132,6 +131,7 @@ async function runAnalysis(
     if (!files.length) throw new ApiError('At least one file is required for analysis', 400);
 
     const entityType = scanType === 'local' ? 'user' : 'project';
+
 
     if (preferredModel) {
         const allowed = scanType === 'repo' ? REPO_MODELS : LOCAL_MODELS;
@@ -197,7 +197,7 @@ async function runAnalysis(
             const startTime = Date.now();
             const response = await groqClient.chat.completions.create({
                 messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'system', content: scanType === 'repo' ? SYSTEM_PROMPT : SYSTEM_PROMPT + `\n6. If the fix requires restructuring code across multiple non-contiguous locations (e.g. extracting a function, renaming across many call sites, moving code between files) such that it cannot be expressed as a single coherent unified diff, set "suggestedFixDiff" to an empty string "" instead of a vague description. Still provide a clear "suggestedFixSummary" explaining what should be done manually.` },
                     { role: 'user', content: prompt },
                 ],
                 model,
