@@ -37,7 +37,8 @@ CRUCIAL INSTRUCTIONS FOR "suggestedFixDiff":
 2. Every line starting with "-" (removed lines) MUST be an EXACT copy of a line from the original file!
 3. Every line starting with "+" (added lines) MUST be the exact fixed version of that line!
 4. Include enough context lines (unmodified lines) to make the patch unambiguous!
-5. Format the diff correctly with @@ lines showing line numbers!`;
+5. Format the diff correctly with @@ lines showing line numbers!
+6. If the fix requires restructuring code across multiple non-contiguous locations (e.g. extracting a function, renaming across many call sites, moving code between files) such that it cannot be expressed as a single coherent unified diff, set "suggestedFixDiff" to an empty string "" instead of a vague description. Still provide a clear "suggestedFixSummary" explaining what should be done manually.`;
 
 const BULK_FIX_SYSTEM_PROMPT = `You are an expert code fixer. Your task is to apply as many of the suggested fixes as possible to the original file.
 
@@ -71,7 +72,9 @@ You MUST return a JSON object with two fields:
   "brief": "A 1-2 sentence extremely concise summary (e.g. 'NestJS TypeScript backend using Prisma and JWT')"
 }`;
 
-
+function isValidUnifiedDiff(patch: string): boolean {
+  return patch.includes('@@') && (patch.includes('---') || patch.includes('+++'));
+}
 
 function parseAnalysisIssues(rawText: string): ScanIssue[] {
     try {
@@ -95,25 +98,25 @@ function parseAnalysisIssues(rawText: string): ScanIssue[] {
         const parsed = JSON.parse(jsonString) as { issues?: unknown[] };
         const rawIssues = Array.isArray(parsed.issues) ? parsed.issues : [];
 
-        return rawIssues.map((raw) => {
-            const item = raw as Record<string, unknown>;
-            return {
-                filePath: String(item.filePath ?? item.filename ?? 'unknown'),
-                severity: String(item.severity ?? 'MEDIUM') as ScanIssue['severity'],
-                category: String(item.category ?? 'OTHER') as ScanIssue['category'],
-                summary: String(item.summary ?? 'Issue detected'),
-                explanation: String(item.explanation ?? ''),
-                source: "AI",
-                codeSnippet: String(item.affectedCodeSnippet ?? item.codeSnippet ?? ''),
-                diffPatch: String(item.suggestedFixDiff ?? item.diffPatch ?? ''),
-                suggestedFixSummary: String(item.suggestedFixSummary ?? item.fixSummary ?? item.summary ?? 'Apply fix'),
-                lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : undefined,
-            };
-        });
-    } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`Invalid JSON output from model: ${detail}`);
-    }
+    return rawIssues.map((raw) => {
+      const item = raw as Record<string, unknown>;
+      return {
+        filePath: String(item.filePath ?? item.filename ?? 'unknown'),
+        severity: String(item.severity ?? 'MEDIUM') as ScanIssue['severity'],
+        category: String(item.category ?? 'OTHER') as ScanIssue['category'],
+        summary: String(item.summary ?? 'Issue detected'),
+        source: "AI",
+        explanation: String(item.explanation ?? ''),
+        codeSnippet: String(item.affectedCodeSnippet ?? item.codeSnippet ?? ''),
+        diffPatch: String(item.suggestedFixDiff ?? item.diffPatch ?? ''),
+        suggestedFixSummary: String(item.suggestedFixSummary ?? item.fixSummary ?? item.summary ?? 'Apply fix'),
+        lineNumber: typeof item.lineNumber === 'number' ? item.lineNumber : undefined,
+      };
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON output from model: ${detail}`);
+  }
 }
 
 async function runAnalysis(

@@ -701,7 +701,10 @@ export const getSuggestions = async (
 export const getAIFixSuggestion = async (userId: number, suggestionId: number) => {
   const suggestion = await prisma.suggestion.findUnique({
     where: { id: suggestionId },
-    include: { scan: { select: { modelUsed: true } } }
+    include: {
+      scan: { select: { modelUsed: true } },
+      issue: { select: { filePath: true, lineNumber: true } }   // NEW
+    }
   });
 
   if (!suggestion) throw new ApiError('Suggestion not found', 404);
@@ -721,10 +724,11 @@ export const getAIFixSuggestion = async (userId: number, suggestionId: number) =
     explanation: suggestion.explanation,
     diffPatch: suggestion.diffPatch,
     modelUsed: suggestion.scan.modelUsed,
-    generatedAt: suggestion.generatedAt
+    generatedAt: suggestion.generatedAt,
+    filePath: suggestion.issue.filePath,     // NEW
+    lineNumber: suggestion.issue.lineNumber, // NEW
   };
 };
-
 export const applyAISuggestion = async (userId: number, suggestionId: number) => {
   const suggestion = await prisma.suggestion.findUnique({
     where: { id: suggestionId },
