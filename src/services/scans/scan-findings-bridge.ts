@@ -33,7 +33,7 @@ export function buildCodeFilesFromFindings(
 }
 
 
-function mergeOverlappingRanges(ranges: { start: number; end: number }[]): { start: number; end: number }[] {
+export function mergeOverlappingRanges(ranges: { start: number; end: number }[]): { start: number; end: number }[] {
     if (ranges.length <= 1) return ranges;
 
     const sorted = [...ranges].sort((a, b) => a.start - b.start);

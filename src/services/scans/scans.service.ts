@@ -5,6 +5,7 @@ import { analyzeLocalScan, CodeFile } from '../ai/ai.service';
 import { mapAnalyzerFindingsToIssueInputs, runRepoScanPipeline } from './scan-pipeline';
 import { analyzeFileContents } from './analysis/analyzer';
 import { buildScanReportPdf } from './scan-report.pdf';
+import { mergeOverlappingRanges } from './scan-findings-bridge';
 
 
 
@@ -37,19 +38,9 @@ function validateAndMergeLines(filePath: string, content: string, selectedLines?
         return { start, end };
     });
 
-    if (mappedLines.length <= 1) return mappedLines;
 
-    // merge overlapping or adjacent ranges to avoid duplicate snippet tags
-    mappedLines.sort((a, b) => a.start - b.start);
-    const merged: LineRange[] = [mappedLines[0]];
-    for (let i = 1; i < mappedLines.length; i++) {
-        const prev = merged[merged.length - 1];
-        if (mappedLines[i].start <= prev.end + 1) {
-            prev.end = Math.max(prev.end, mappedLines[i].end);
-        } else {
-            merged.push(mappedLines[i]);
-        }
-    }
+    const merged = mergeOverlappingRanges(mappedLines);
+
     return merged;
 }
 

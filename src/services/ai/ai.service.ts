@@ -274,7 +274,7 @@ ${originalContent}
 Suggestions to apply:
 ${suggestionsBlock}
 
-Please apply as many suggestions as possible and return the full modified file along with which suggestions were applied and which failed.`;
+Apply these suggestions and return the full modified file along with which suggestions were applied and which failed.`;
 
     const inputTokens = Math.ceil((BULK_FIX_SYSTEM_PROMPT.length + prompt.length) / 3.2);
     const maxOutput = 8000;
